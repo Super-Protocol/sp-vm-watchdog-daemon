@@ -35,6 +35,11 @@ format:
 	python3 -m isort --profile black --length-sort --reverse-sort  --multi-line 3 .
 	python3 -m black --skip-string-normalization --line-length=120 .
 
+.PHONY: lint
+lint:
+	python3 -m isort --profile black --length-sort --reverse-sort  --multi-line 3 --check --diff .
+	python3 -m black --skip-string-normalization --line-length=120 --check --diff .
+
 .PHONY: clean
 clean:
 	rm -rf $(OUTPUT)
