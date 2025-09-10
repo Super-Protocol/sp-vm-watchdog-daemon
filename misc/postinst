@@ -1,0 +1,5 @@
+#!/bin/bash
+
+systemctl daemon-reload || true
+systemctl enable sp-vm-watchdog-daemon || true
+systemctl start sp-vm-watchdog-daemon || true

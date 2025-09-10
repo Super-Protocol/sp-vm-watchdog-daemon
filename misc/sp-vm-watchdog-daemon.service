@@ -1,0 +1,13 @@
+[Unit]
+Description=Daemon to automatically download SuperProtocol VM images
+After=network.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+WorkingDirectory=/usr/bin/sp-vm-watchdog-daemon/app
+ExecStart=/usr/bin/sp-vm-watchdog-daemon/app/start.sh
+
+[Install]
+WantedBy=multi-user.target

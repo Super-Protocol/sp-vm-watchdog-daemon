@@ -1,0 +1,6 @@
+Package: sp-vm-watchdog-daemon
+Version: ${VERSION}
+Architecture: amd64
+Maintainer: DrunkBatya <drunkbatya.js@gmail.com>
+Description: Daemon to control the SuperProtocol VMs
+Depends: python3 (>= 3.9.0)
