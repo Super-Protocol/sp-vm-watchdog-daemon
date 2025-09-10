@@ -1,6 +1,4 @@
-ifndef VERSION
-$(error VERSION is not set)
-endif
+VERSION ?= 0.0.0
 
 SHELL := /bin/bash
 

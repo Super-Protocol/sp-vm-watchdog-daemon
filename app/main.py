@@ -4,6 +4,7 @@ import argparse
 import logging
 import time
 
+
 def parseArgs() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Daemon to control the SuperProtocol VMs",
@@ -17,9 +18,7 @@ def init_logging(level_str: str) -> None:
     level = getattr(logging, level_str.upper(), None)
     if level is None:
         raise Exception(f"wrong log level: {level_str}")
-    logging.basicConfig(
-        level=level, format="%(asctime)s [%(name)s] [%(levelname)s]: %(message)s"
-    )
+    logging.basicConfig(level=level, format="%(asctime)s [%(name)s] [%(levelname)s]: %(message)s")
 
 
 def main():
