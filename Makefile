@@ -6,11 +6,27 @@ OUTPUT=build
 SOURCE=app
 MISC=misc
 
+ARGS :=
+
 APP_NAME=sp-vm-watchdog-daemon_$(VERSION)-1_amd64
 SOURCES=$(shell find $(SOURCE) -type f)
 MISC_FILES=$(shell find $(MISC) -type f)
 
 all: $(OUTPUT)/$(APP_NAME).deb
+
+$(OUTPUT)/venv/bin/activate: $(SOURCE)/requirements.txt $(MISC_FILES) Makefile
+	@echo -e "\tVENV\t$(OUTPUT)/venv"
+	@mkdir -p $(OUTPUT)/venv
+	@python3 -m venv $(OUTPUT)/venv
+	@source $(OUTPUT)/venv/bin/activate \
+		&& python3 -m pip install -r \
+		$(SOURCE)/requirements.txt
+
+.PHONY: run
+run: $(OUTPUT)/venv/bin/activate
+	@source $(OUTPUT)/venv/bin/activate \
+		&& python3 $(SOURCE)/main.py $(ARGS)
+
 
 $(OUTPUT)/$(APP_NAME).deb: $(SOURCES) $(MISC_FILES) Makefile
 	mkdir -p $(OUTPUT)/$(APP_NAME)/DEBIAN

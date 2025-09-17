@@ -4,12 +4,15 @@ import argparse
 import logging
 import time
 
+from modules import AppConfig
+
 
 def parseArgs() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Daemon to control the SuperProtocol VMs",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    parser.add_argument("--config", help="Main config file", default="/var/lib/sp/watchdog/config.json")
     parser.add_argument("--log-level", help="Log level", default="INFO")
     return parser.parse_args()
 
@@ -24,6 +27,9 @@ def init_logging(level_str: str) -> None:
 def main():
     args = parseArgs()
     init_logging(args.log_level)
+    conf = AppConfig.load(args.config)
+    print(conf.text_config.dump())
+    return
 
     while True:
         try:
