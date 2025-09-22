@@ -36,7 +36,7 @@ class VmRunConfig(BaseModel):
         if self.build_dir and self.vm_build:
             raise ValueError("`build_dir` and `vm_build` are mutually exclusive")
         if not self.build_dir and not self.vm_build:
-            raise ValueError("`build_dir` or `vm_build` must be set")
+            self.vm_build = "auto"
         return self
 
 
@@ -46,7 +46,7 @@ class VmQemuConfig(BaseModel):
     mem_gb: int = Field(..., gt=8)
     state_disk_size_gb: int = Field(..., gt=400)
     gpu: str = "all"  # model_validator
-    cache_dir: str
+    cache_dir: str = None
     mac_address: str = "52:54:00:12:34:56"  # model_validator
     ip_address: str = "0.0.0.0"  # model_validator
     ssh_port: int = 2222
@@ -72,6 +72,7 @@ class VmConfig(BaseModel):
 
 class TextConfigVmConfig(BaseModel):
     configs_dir: str | None = None
+    authorized_keys_file: str | None = None
 
     @model_validator(mode="after")
     def check_empty_and_set_defaults(self):

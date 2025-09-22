@@ -29,7 +29,6 @@ def main():
     init_logging(args.log_level)
     conf = AppConfig.load(args.config)
     print(conf.text_config.dump())
-    return
 
     while True:
         try:
