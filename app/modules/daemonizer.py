@@ -1,5 +1,8 @@
 import subprocess
 import logging
+import signal
+import time
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +59,7 @@ class Daemonizer:
     def write_pid_file(self, pid: int) -> None:
         try:
             self.pid_file.write_text(str(pid))
+            logging.info(f"pid: `{pid}` written to pid file `{self.pid_file}`")
         except Exception as e:
             logging.warning(f"failed to write pid: `{pid}` to pid file `{self.pid_file}`, reason {e}")
 
@@ -106,15 +110,69 @@ class Daemonizer:
         self.write_pid_file(p.pid)
 
         if log_f:
-            log_f.close()
+            log_f.close()  # the decriptors will alive in a child process
+
+    def graceful_shutdown(self, pid: int, timeout: int = 120) -> bool:
+        logging.info(f"sending sigterm to process with pid: `{pid}`")
+
+        process = self.get_process_from_pid(pid)
+        if process is None:
+            logging.error(f"attempting to shutdown process with pid `{pid}` but it isn't found")
+            return False
+
+        try:
+            os.killpg(pid, signal.SIGTERM)
+        except Exception as e:
+            logging.error(f"graceful shutdown of process with pid: `{pid}` failed with exception: {e}")
+            return False
+
+        logging.info(f"awaiting graceful shutdown of process with pid: `{pid}`, timeout: `{timeout}`")
+        gone, alive = psutil.wait_procs([process], timeout=timeout)
+        if alive:
+            logging.warning(
+                f"timeout: `{timeout}` is exeeded while awaiting graceful shutdown of process with pid: `{pid}`"
+            )
+        else:
+            logging.info(f"graceful shutdown success for process with pid: `{pid}`")
+        return not alive
+
+    def kill(self, pid: int) -> bool:
+        logging.info(f"sending sigkill to process with pid: `{pid}`")
+
+        process = self.get_process_from_pid(pid)
+        if process is None:
+            logging.error(f"attempting to kill process with pid `{pid}` but it isn't found")
+            return False
+
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except Exception as e:
+            logging.error(f"kill of process with pid: `{pid}` failed with exception: {e}")
+            return False
+
+        logging.info(f"kill success for process with pid: `{pid}`")
+        return True
 
     def stop(self) -> None:
-        pass
+        pid = self.get_pid_from_file()
+        if pid is None:
+            logging.error(f"attempting to stop process but can't get pid from file: `{self.pid_file}`")
+            return
+
+        graceful_terminated = self.graceful_shutdown(pid)
+        if not graceful_terminated:
+            self.kill(pid)
+
+        self.remove_pid_file()
 
 
 if __name__ == "__main__":
     logging.getLogger().setLevel(logging.INFO)
-    d = Daemonizer.new(["sleep", "10000000"], "/tmp/test.pid")
-    d.start()
+    d = Daemonizer(["/tmp/test"], Path("/tmp/test.pid"), Path("/tmp/test.log"))
+    d2 = Daemonizer(["/tmp/test"], Path("/tmp/test2.pid"), Path("/tmp/test.log"))
+    # d.start()
+    # d2.start()
     print(d.get_process_cmdline())
-    # print(d.get_process_cmdline())
+    time.sleep(1)
+    d.stop()
+    d2.stop()

@@ -4,7 +4,7 @@ import argparse
 import logging
 import time
 
-from modules import AppConfig
+from modules import AppConfig, Qemu
 
 
 def parseArgs() -> argparse.Namespace:
@@ -28,7 +28,10 @@ def main():
     args = parseArgs()
     init_logging(args.log_level)
     conf = AppConfig.load(args.config)
+    vms_from_config = [Qemu.load_from_config(vm) for vm in conf.vm_configs]
     print(conf.text_config.dump())
+    print(vms_from_config)
+    print([qemu.get_cmdline_from_config() for qemu in vms_from_config])
 
     while True:
         try:

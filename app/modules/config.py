@@ -3,20 +3,13 @@ import json
 import os
 from collections import Counter
 from pathlib import Path
-from enum import Enum
 
 from pydantic import model_validator, BaseModel, Field
 
+from .models import detected_cpu_type, VmQemuConfigMode
 from . import utils
 
 __logger__ = logging.getLogger(__name__)
-
-
-class VmQemuConfigMode(str, Enum):
-    AUTO = "auto"
-    TDX = "tdx"
-    SEV_SNP = "sev-snp"
-    UNTRUSTED = "untrusted"
 
 
 class ProviderConfig(BaseModel):
@@ -41,6 +34,7 @@ class VmRunConfig(BaseModel):
 
 
 class VmQemuConfig(BaseModel):
+    qemu_path: Path | None = None
     mode: VmQemuConfigMode = VmQemuConfigMode.AUTO
     cores: int = Field(..., gt=0)
     mem_gb: int = Field(..., gt=8)
@@ -52,6 +46,23 @@ class VmQemuConfig(BaseModel):
     ssh_port: int = 2222
     http_port: int = 0
     https_port: int = 0
+    guest_cid: int | None = None
+
+    @model_validator(mode="after")
+    def set_qemu_path(self):
+        if self.qemu_path is None:
+            self.qemu_path = utils.found_system_qemu
+        else:  # deserializing str from json conf to Path
+            self.qemu_path = Path(self.qemu_path)
+            if (not self.qemu_path.is_file()) or (not os.access(self.qemu_path, os.X_OK)):
+                raise Exception(f'directly specified qemu path: `{self.qemu_path}` is absent or not executable')
+        return self
+
+    @model_validator(mode="after")
+    def set_vm_mode(self):
+        if self.mode == VmQemuConfigMode.AUTO:
+            self.mode = detected_cpu_type
+        return self
 
 
 class VmConfig(BaseModel):
@@ -141,9 +152,29 @@ class AppConfig(BaseModel):
         return cls(text_config=text_config, vm_configs=vm_configs)
 
     @model_validator(mode="after")
+    def set_guest_cid(self):
+        guest_cid = 3
+        aquired_guest_cids = [
+            vm.qemu_configuration.guest_cid for vm in self.vm_configs if vm.qemu_configuration.guest_cid is not None
+        ]
+        for vm in self.vm_configs:
+            if vm.qemu_configuration.guest_cid is None:
+                while guest_cid in aquired_guest_cids:
+                    guest_cid += 1
+                vm.qemu_configuration.guest_cid = guest_cid
+                guest_cid += 1
+        return self
+
+    @model_validator(mode="after")
     def check_unique_fields(self):
         utils.assert_unique(self.vm_configs, "name", "name")
         utils.assert_unique(
             self.vm_configs, "qemu_configuration.ssh_port", "name", lambda x: x.run_configuration.debug == True
+        )
+        utils.assert_unique(
+            self.vm_configs,
+            "qemu_configuration.guest_cid",
+            "name",
+            lambda x: x.qemu_configuration.mode == VmQemuConfigMode.TDX,
         )
         return self
