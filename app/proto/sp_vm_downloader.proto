@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package sp_vm_downloader;
+
+service SpVmDownloader {
+  rpc GetRelease (ReleaseRequest) returns (ReleaseReply) {}
+}
+
+message ReleaseRequest {
+  string name = 1;
+}
+
+message ReleaseReply {
+  string path = 1;
+  string msg = 2;
+  bool success = 3;
+}

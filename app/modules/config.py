@@ -28,8 +28,14 @@ class VmRunConfig(BaseModel):
     def check_mutually_exclusive(self):
         if self.build_dir and self.vm_build:
             raise ValueError("`build_dir` and `vm_build` are mutually exclusive")
-        if not self.build_dir and not self.vm_build:
-            self.vm_build = "auto"
+        return self
+
+    @model_validator(mode="after")
+    def set_latest_vm_build_if_unset(self):
+        if self.build_dir:
+            self.vm_build = "build-local"
+        elif self.vm_build in [None, "auto"]:
+            self.vm_build = "TODO"
         return self
 
 
