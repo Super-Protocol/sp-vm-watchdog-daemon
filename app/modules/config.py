@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pydantic import model_validator, BaseModel, Field
 
+from .image_manager import image_manager
 from .models import detected_cpu_type, VmQemuConfigMode
 from . import utils
 
@@ -35,7 +36,7 @@ class VmRunConfig(BaseModel):
         if self.build_dir:
             self.vm_build = "build-local"
         elif self.vm_build in [None, "auto"]:
-            self.vm_build = "TODO"
+            self.vm_build = image_manager.get_latest_github_release()
         return self
 
 
