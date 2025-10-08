@@ -133,7 +133,7 @@ class TextConfig(BaseModel):
     @classmethod
     def load_or_default(cls, filename: str) -> "TextConfig":
         filepath = Path(filename)
-        filepath.parent.mkdir(exist_ok=True)
+        filepath.parent.mkdir(exist_ok=True, parents=True)
 
         # creating config, if not exists
         if not filepath.exists():
