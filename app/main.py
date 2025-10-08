@@ -4,7 +4,7 @@ import argparse
 import logging
 import time
 
-from modules import image_manager, ImageManager, AppConfig, Qemu
+from modules import image_manager, AppConfig, Qemu
 
 
 def parseArgs() -> argparse.Namespace:

@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 from pydantic import model_validator, BaseModel, Field
 
 from .image_manager import image_manager
@@ -5,25 +8,25 @@ from .models import VmQemuConfigMode
 from .config import VmConfig
 
 #    QEMU_COMMAND="${QEMU_PATH} \
-#        -enable-kvm \
-#        -append \"${KERNEL_CMD_LINE}\" \
-#        -drive file=${IMAGE_PATH},if=virtio,format=raw,readonly=on \
-#        -drive file=${STATE_DISK_PATH},if=virtio,format=qcow2 \
-#        -drive file=${PROVIDER_CONFIG_DISK_PATH},if=virtio,format=raw,readonly=on \
-#        -kernel ${KERNEL_PATH} \
-#        -smp cores=${VM_CPU} \
-#        -m ${VM_RAM}G \
-#        ${CPU_PARAMS} \
-#        -machine ${MACHINE_PARAMS} \
-#        ${CC_SPECIFIC_PARAMS} \
-#        ${NETWORK_SETTINGS} \
-#        -nographic \
-#        ${CC_PARAMS} \
-#        -bios ${BIOS_PATH} \
-#        -vga none \
-#        -nodefaults \
-#        -serial stdio \
-#        -device vhost-vsock-pci,guest-cid=${GUEST_CID} \
+#         -enable-kvm \
+#         -append \"${KERNEL_CMD_LINE}\" \
+#         -drive file=${IMAGE_PATH},if=virtio,format=raw,readonly=on \
+#         -drive file=${STATE_DISK_PATH},if=virtio,format=qcow2 \
+#         -drive file=${PROVIDER_CONFIG_DISK_PATH},if=virtio,format=raw,readonly=on \
+#         -kernel ${KERNEL_PATH} \
+#         -smp cores=${VM_CPU} \
+#         -m ${VM_RAM}G \
+#         ${CPU_PARAMS} \
+#         -machine ${MACHINE_PARAMS} \
+#         ${CC_SPECIFIC_PARAMS} \
+#         ${NETWORK_SETTINGS} \
+#         -nographic \
+#         ${CC_PARAMS} \
+#         -bios ${BIOS_PATH} \
+#         -vga none \
+#         -nodefaults \
+#         -serial stdio \
+#         -device vhost-vsock-pci,guest-cid=${GUEST_CID} \
 #        ${GPU_PASSTHROUGH} \
 #        "
 
@@ -36,18 +39,53 @@ class Qemu(BaseModel):
     def load_from_config(cls, config: VmConfig) -> "Qemu":
         return cls(config=config)
 
-    def get_cpu_specific_args(self) -> list[str]:
-        args = []
+    def get_cpu_params(self) -> list[str]:
+        ret = []
         mode = self.config.qemu_configuration.mode
         if mode == VmQemuConfigMode.TDX:
-            args += ["clearcpuid=mtrr"]
-            args += [
+            ret += ["-cpu", "host"]
+        elif mode == VmQemuConfigMode.SEV_SNP:
+            ret += ["-cpu", "EPYC-Milan"]
+        else:
+            ret += ["-cpu", "host"]
+        return ret
+
+    def get_machine_params(self) -> list[str]:
+        ret = []
+        mode = self.config.qemu_configuration.mode
+        if mode == VmQemuConfigMode.TDX:
+            ret += ["-machine", "q35,kernel_irqchip=split,confidential-guest-support=tdx,memory-backend=mem0"]
+        elif mode == VmQemuConfigMode.SEV_SNP:
+            ret += ["-machine", "q35,confidential-guest-support=sev0,vmport=off"]
+        else:
+            ret += ["-machine", "q35,kernel_irqchip=split"]
+        return ret
+
+    def get_cpu_specific_args(self) -> list[str]:
+        ret = []
+        mode = self.config.qemu_configuration.mode
+        if mode == VmQemuConfigMode.TDX:
+            ret += ["-object", f"memory-backend-ram,id=mem0,size=${self.config.qemu_configuration.mem_gb}G"]
+
+            VMADDR_CID_HOST = 2  # https://man7.org/linux/man-pages/man7/vsock.7.html
+            obj = {
+                "qom-type": "tdx-guest",
+                "id": "tdx",
+                "quote-generation-socket": {"type": "vsock", "cid": str(VMADDR_CID_HOST), "port": "4050"},
+            }
+            ret += ["-object", json.dumps(obj)]
+
+            ret += ["clearcpuid=mtrr"]
+            ret += [
                 "-device",
                 f"vhost-vsock-pci,guest-cid={self.config.qemu_configuration.guest_cid}",
             ]
         elif mode == VmQemuConfigMode.SEV_SNP:
-            args += [f"build={self.config.run_configuration.vm_build}"]
-        return args
+            ret += [
+                "-object",
+                f"sev-snp-guest,id=sev0,cbitpos={str(detected_cpu_cbitpos)},reduced-phys-bits=1,policy=0x30000,kernel-hashes=on",
+            ]
+        return ret
 
     def get_kernel_verify_args(self) -> list[str]:
         verity_scheme = "rootfs_verity.scheme=dm-verity"
@@ -58,8 +96,24 @@ class Qemu(BaseModel):
         return [verity_scheme, verity_hash_str]
 
     def get_kernel_cmdline(self) -> str:
-        rootfs_arg = "root=LABEL=rootfs"
-        return ' '.join([rootfs_arg] + self.get_kernel_verify_args())
+        cmdline_arr = []
+        cmdline_arr += ["root=LABEL=rootfs"]
+        cmdline_arr += self.get_kernel_verify_args()
+
+        if self.config.qemu_configuration.mode == VmQemuConfigMode.SEV_SNP:
+            cmdline_arr += [f"build={self.config.run_configuration.vm_build}"]
+
+        if self.config.run_configuration.debug is True:
+            cmdline_arr += [
+                "console=ttyS0",
+                "systemd.log_level=trace",
+                "systemd.log_target=log",
+                f"argo_branch={self.config.run_configuration.argo_branch}",
+                f"argo_sp_env={self.config.run_configuration.argo_sp_env}",
+                "sp-debug=true",
+            ]
+
+        return ' '.join(cmdline_arr)
 
     def get_bios_path(self) -> str:
         bios_path = (
@@ -71,6 +125,15 @@ class Qemu(BaseModel):
             raise Exception(f'failed to get bios_path for release: `{self.config.run_configuration.vm_build}`')
         return bios_path
 
+    def create_disk_image(self, target_file: str, img_type: str, size: str, remove_if_exists) -> None:
+        cmd = ['qemu-img', 'create', '-f', img_type, target_file, size]
+        ret = subprocess.run(cmd, capture_output=True)
+        if ret.returncode != 0:
+            stdout = ret.stdout.decode('utf-8')
+            stderr = ret.stderr.decode('utf-8')
+            msg = f'{stdout} {stderr}'
+            raise Exception(f'failed to create qemu img: `target_file`, reason: `{msg}`')
+
     def get_disks(self) -> str:
         ret = []
 
@@ -79,8 +142,43 @@ class Qemu(BaseModel):
             raise Exception(f'failed to get image_path for release: `{self.config.run_configuration.vm_build}`')
         ret += ["-drive", f"file={image_path},if=virtio,format=raw,readonly=on"]
 
-        # ret += ["-drive", f"file=${STATE_DISK_PATH},if=virtio,format=qcow2"]
-        # ret += ["-drive", f"file=${PROVIDER_CONFIG_DISK_PATH},if=virtio,format=raw,readonly=on"]
+        state_disk_path = Path(self.config.qemu_configuration.cache_dir) / Path('state.qcow2')
+        # this function will be calleb before we knows is VM running or need to be runned, or rerunned
+        # so we just need to set path, and creating, deleting will be performed later
+        # state_disk_size = f'{self.config.qemu_configuration.state_disk_size_gb}G'
+        # self.create_disk_image(target_file=state_disk_path, img_type="qcow2", state_disk_size)
+        ret += ["-drive", f"file={state_disk_path},if=virtio,format=qcow2"]
+
+        provider_config_disk_path = Path(self.config.qemu_configuration.cache_dir) / Path('provider_config.img')
+        # and the same about provider_config_disk_path
+        # provider_config_disk_size = '1M'
+        # self.create_disk_image(target_file=provider_config_disk_path, img_type="raw", provider_config_disk_size)
+        ret += ["-drive", f"file={provider_config_disk_path},if=virtio,format=raw,readonly=on"]
+
+        return ret
+
+    def get_network_args(self) -> list[str]:
+        ret = []
+        port_forward_arr = []
+
+        ip_addr = self.config.qemu_configuration.ip_address
+        http_port = self.config.qemu_configuration.http_port
+        if http_port is not None:
+            port_forward_arr += [f"hostfwd=tcp:{ip_addr}:{http_port}-:80"]
+
+        https_port = self.config.qemu_configuration.https_port
+        if https_port is not None:
+            port_forward_arr += [f"hostfwd=tcp:{ip_addr}:{https_port}-:443"]
+
+        if self.config.run_configuration.debug is True:
+            ssh_port = self.config.qemu_configuration.ssh_port
+            port_forward_arr += [f"hostfwd=tcp:127.0.0.1:{ssh_port}-:22"]
+
+        nic_0_id = 0  # has single qemu process scope
+        nic_0_mac = self.config.qemu_configuration.mac_address  # has single qemu process scope (inside VM)
+        ret += ["-device", f"virtio-net-pci,netdev=nic_id{nic_0_id},mac={nic_0_mac}"]
+        ret += ["-netdev", f"user,id=nic_id{nic_0_id}" + ("," + ",".join(port_forward_arr) if port_forward_arr else "")]
+
         return ret
 
     def get_cmdline_from_config(self) -> list[str]:
@@ -95,6 +193,9 @@ class Qemu(BaseModel):
         ret += ["-m", f"{self.config.qemu_configuration.mem_gb}G"]
         ret += ["-append", self.get_kernel_cmdline()]
         ret += ["-bios", self.get_bios_path()]
+        ret += self.get_machine_params()
+        ret += self.get_cpu_params()
         ret += self.get_cpu_specific_args()
         ret += self.get_disks()
+        ret += self.get_network_args()
         return ret

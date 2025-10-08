@@ -47,12 +47,12 @@ class VmQemuConfig(BaseModel):
     mem_gb: int = Field(..., gt=8)
     state_disk_size_gb: int = Field(..., gt=400)
     gpu: str = "all"  # model_validator
-    cache_dir: str = None
-    mac_address: str = "52:54:00:12:34:56"  # model_validator
-    ip_address: str = "0.0.0.0"  # model_validator
+    cache_dir: str | None = None
+    mac_address: str = "52:54:00:12:34:56"
+    ip_address: str = "0.0.0.0"
     ssh_port: int = 2222
-    http_port: int = 0
-    https_port: int = 0
+    http_port: int | None = None
+    https_port: int | None = None
     guest_cid: int | None = None
 
     @model_validator(mode="after")
@@ -86,6 +86,16 @@ class VmConfig(BaseModel):
 
     def dump(self) -> str:
         return self.model_dump_json(indent=2)
+
+    # need to be here cause we'r not know the vm name being level down
+    # maybe it needs to be a more levels upper to prevent `'/var/lib/sp/watchdog` hardcode
+    @model_validator(mode="after")
+    def set_cache_dir(self):
+        if self.qemu_configuration.cache_dir is None:
+            vm_cache_dir = Path('/var/lib/sp/watchdog/cache') / Path(self.name)
+            vm_cache_dir.mkdir(exist_ok=True, parents=True)
+            self.qemu_configuration.cache_dir = str(vm_cache_dir)
+        return self
 
 
 class TextConfigVmConfig(BaseModel):
@@ -153,7 +163,10 @@ class AppConfig(BaseModel):
     def load(cls, filename: str) -> "AppConfig":
         text_config = TextConfig.load_or_default(filename)
 
-        vm_configs = [VmConfig.load(f) for f in Path(text_config.vm_config.configs_dir).glob("*.json")]
+        vm_configs = [
+            VmConfig.load(f)
+            for f in sorted(Path(text_config.vm_config.configs_dir).glob("*.json"), key=lambda p: p.name)
+        ]
         [print(f.dump()) for f in vm_configs]
 
         return cls(text_config=text_config, vm_configs=vm_configs)
@@ -183,5 +196,19 @@ class AppConfig(BaseModel):
             "qemu_configuration.guest_cid",
             "name",
             lambda x: x.qemu_configuration.mode == VmQemuConfigMode.TDX,
+        )
+        utils.assert_unique_pair(
+            self.vm_configs,
+            "qemu_configuration.http_port",
+            "qemu_configuration.ip_address",
+            "name",
+            lambda x: x.qemu_configuration.http_port is not None,
+        )
+        utils.assert_unique_pair(
+            self.vm_configs,
+            "qemu_configuration.https_port",
+            "qemu_configuration.ip_address",
+            "name",
+            lambda x: x.qemu_configuration.https_port is not None,
         )
         return self
