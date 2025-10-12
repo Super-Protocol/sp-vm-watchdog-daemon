@@ -35,7 +35,6 @@ def main():
     print(gpu_manager.gpu_manager.find_gpu_on_system())
     return
 
-
     vms_from_config = [Qemu.load_from_config(vm) for vm in conf.vm_configs]
 
     print(conf.text_config.dump())
