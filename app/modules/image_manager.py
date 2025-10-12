@@ -122,4 +122,4 @@ class ImageManager:
         return rootfs_hash_path.read_text(encoding="utf-8").strip()
 
 
-image_manager = ImageManager("/var/run/sp-vm-downloader.sock")
+image_manager: ImageManager | None = None

@@ -29,7 +29,10 @@ def main():
     init_logging(args.log_level)
     conf = AppConfig.load(args.config)
 
-    print(gpu_manager.find_gpu_on_system())
+    gpu_manager.gpu_manager = gpu_manager.GpuManager()
+    image_manager.image_manager = image_manager.ImageManager("/var/run/sp-vm-downloader.sock")
+
+    print(gpu_manager.gpu_manager.find_gpu_on_system())
     return
 
 
