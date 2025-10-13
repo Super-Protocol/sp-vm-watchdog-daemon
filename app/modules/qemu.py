@@ -37,7 +37,9 @@ class Qemu(BaseModel):
 
     @classmethod
     def load_from_config(cls, config: VmConfig) -> "Qemu":
-        return cls(config=config)
+        c = cls(config=config)
+        c.cmd = c.get_cmdline_from_config()
+        return c
 
     def get_cpu_params(self) -> list[str]:
         ret = []

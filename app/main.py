@@ -4,7 +4,7 @@ import argparse
 import logging
 import time
 
-from modules import image_manager, gpu_manager, AppConfig, Qemu
+from modules import image_manager, gpu_manager, VmManager, AppConfig, Qemu
 
 
 def parseArgs() -> argparse.Namespace:
@@ -27,23 +27,13 @@ def init_logging(level_str: str) -> None:
 def main():
     args = parseArgs()
     init_logging(args.log_level)
-    conf = AppConfig.load(args.config)
 
-    gpu_manager.gpu_manager = gpu_manager.GpuManager()
-    image_manager.image_manager = image_manager.ImageManager("/var/run/sp-vm-downloader.sock")
-
-    print(gpu_manager.gpu_manager.find_gpu_on_system())
-    return
-
-    vms_from_config = [Qemu.load_from_config(vm) for vm in conf.vm_configs]
-
-    print(conf.text_config.dump())
-    print(vms_from_config)
-    print([qemu.get_cmdline_from_config() for qemu in vms_from_config])
+    conf = AppConfig.load(filename=args.config)
+    vm_manager = VmManager(config=conf)
 
     while True:
         try:
-            pass
+            vm_manager.run()
         except Exception as e:
             logging.exception(e)
             time.sleep(60)

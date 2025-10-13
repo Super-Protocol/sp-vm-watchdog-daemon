@@ -33,6 +33,7 @@ class GpuManager:
         self.devices = []
 
         self.init_modules()
+        self.find_gpu_on_system()
 
     def init_modules(self) -> None:
         self.logger.info(f'initializing kernel modules: {self.requred_kernel_modules}')
@@ -139,4 +140,5 @@ class GpuManager:
         device.driver_in_use = driver_name
 
 
-gpu_manager: GpuManager | None = None
+# gpu_manager: GpuManager | None = None
+gpu_manager = GpuManager()
