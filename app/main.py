@@ -12,7 +12,7 @@ def parseArgs() -> argparse.Namespace:
         description="Daemon to control the SuperProtocol VMs",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--config", help="Main config file", default="/var/lib/sp/watchdog/config.json")
+    parser.add_argument("--config", help="Main config file", default="/etc/sp/watchdog/config.json")
     parser.add_argument("--log-level", help="Log level", default="INFO")
     return parser.parse_args()
 

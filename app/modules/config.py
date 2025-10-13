@@ -99,29 +99,13 @@ class VmConfig(BaseModel):
 
 
 class TextConfigVmConfig(BaseModel):
-    configs_dir: str | None = None
+    configs_dir: str = "/etc/sp/watchdog/vms"
     authorized_keys_file: str | None = None
-
-    @model_validator(mode="after")
-    def check_empty_and_set_defaults(self):
-        if self.configs_dir is None:
-            self.configs_dir = "/var/lib/sp/watchdog/vms"
-            __logger__.warning(f"using default vms config dir value `{self.configs_dir}`")
-        if len(self.configs_dir) < 1:
-            raise Exception(f"wrong vms config dir: `{self.configs_dir}`")
-
-        return self
 
     @model_validator(mode="after")
     def check_configs_dir_readable(self):
         configs_dir_path = Path(self.configs_dir)
-        if not configs_dir_path.is_dir():
-            __logger__.info(f"creating vms config dir `{configs_dir_path}`")
-            try:
-                configs_dir_path.mkdir(parents=True)
-            except Exception as e:
-                raise Exception(f"failed to create vms config dir: `{configs_dir_path}`, reason: {e}")
-
+        configs_dir_path.mkdir(parents=True, exist_ok=True)
         if not os.access(configs_dir_path, os.R_OK):
             raise Exception(f"vms config dir isn't readable: `{configs_dir_path}`")
         return self

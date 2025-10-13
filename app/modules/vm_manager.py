@@ -47,6 +47,7 @@ class VmManager:
         self.start_vm(d)
 
     def run(self):
+        self.logger.info(f'started, found: `{len(self.vms)}` VMs')
         while True:
             for d in self.vms:
                 self.logger.info(f'checking vm: `{d.vm.config.name}`')
