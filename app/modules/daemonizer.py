@@ -105,16 +105,28 @@ class Daemonizer:
 
         if self.log_file:
             self.log_file.touch()
-            log_f = open(self.log_file, "ab", buffering=0)
+            log_f = open(self.log_file, "wb", buffering=0)
             kwargs["stdout"] = log_f
             kwargs["stderr"] = log_f
 
-        p = subprocess.Popen(self.get_process_cmdline(), **kwargs)
-        # self.assert_process_started(p)
+        enterprise_delay_timeout = 5
+        vm_name = self.vm.config.name
+
+        p = subprocess.Popen(self.vm.cmd, **kwargs)
+
+        __logger__.info(f"vm: `{vm_name}` started, waiting: `{enterprise_delay_timeout}` sec for check")
+        time.sleep(enterprise_delay_timeout)  # enterprise delay
+
+        if p.poll() is not None:
+            __logger__.error(f'failed to start vm: `{vm_name}`, check log file: `{self.log_file}`')
+            return
+
         self.write_pid_file(p.pid)
 
         if log_f:
             log_f.close()  # the decriptors will alive in a child process
+
+        __logger__.info(f"vm: `{vm_name}` started successfully")
 
     def graceful_shutdown(self, pid: int, timeout: int = 120) -> bool:
         __logger__.info(f"sending sigterm to process with pid: `{pid}`")

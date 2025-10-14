@@ -14,7 +14,23 @@ __logger__ = logging.getLogger(__name__)
 
 
 class ProviderConfig(BaseModel):
-    test: str
+    execution_controller_tee_prov_configmap: str
+    sp_pki_challenge_secret: str | None = None
+
+    @model_validator(mode="after")
+    def check_execution_controller_tee_prov_configmap(self):
+        configmap_path = Path(self.execution_controller_tee_prov_configmap)
+        if not os.access(configmap_path, os.R_OK):
+            raise Exception(f"execution_controller_tee_prov_configmap isn't readable: `{configmap_path}`")
+        return self
+
+    @model_validator(mode="after")
+    def check_sp_pki_challenge_secret(self):
+        if self.sp_pki_challenge_secret is not None:
+            secret_path = Path(self.sp_pki_challenge_secret)
+            if not os.access(secret_path, os.R_OK):
+                raise Exception(f"sp_pki_challenge_secret isn't readable: `{secret_path}`")
+        return self
 
 
 class VmRunConfig(BaseModel):
@@ -154,6 +170,12 @@ class AppConfig(BaseModel):
         [print(f.dump()) for f in vm_configs]
 
         return cls(text_config=text_config, vm_configs=vm_configs)
+
+    @model_validator(mode="after")
+    def remove_disabled_vms(self):
+        vm_configs = [vm for vm in self.vm_configs if vm.enabled == True]
+        self.vm_configs = vm_configs
+        return self
 
     @model_validator(mode="after")
     def set_guest_cid(self):

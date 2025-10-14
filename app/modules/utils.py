@@ -1,5 +1,7 @@
 import subprocess
+import tempfile
 import struct
+import shutil
 import os
 from collections import defaultdict, Counter
 from operator import attrgetter
@@ -75,6 +77,55 @@ def get_cpu_cbitpos() -> int:
     ret_eax, ret_ebx, ret_ecx, ret_edx = struct.unpack("<4I", data)
 
     return ret_ebx & 0x3F
+
+
+def is_file_in_use(path: str) -> bool:
+    cmd = ['lsof', path]
+    ret = subprocess.run(cmd, capture_output=True)
+    if ret.returncode == 0:
+        return True
+
+    # is exit code != 0 this means both: error, and the file isn't opened by anything
+    stderr = ret.stderr.decode('utf-8')
+    if not stderr:
+        return False
+
+    stdout = ret.stdout.decode('utf-8')
+    msg = f'{stdout} {stderr}'
+    raise Exception(f'lsof on `{path}` failed, reason: `{msg}`')
+
+
+def prepare_provider_config_disk(image_path: str, source_files: dict) -> None:
+    mount_path_temp = tempfile.TemporaryDirectory()
+    mount_path = mount_path_temp.name
+    try:
+        cmd = ["mkfs.ext4", "-O", "^has_journal,^huge_file,^meta_bg,^ext_attr", "-L", "provider_config", image_path]
+        ret = subprocess.run(cmd, capture_output=True)
+        assert ret.returncode == 0
+
+        cmd = ["mount", "-o", "loop", image_path, mount_path]
+        ret = subprocess.run(cmd, capture_output=True)
+        assert ret.returncode == 0
+
+        for target_name, source_path in source_files.items():
+            shutil.copy(Path(source_path), Path(mount_path) / Path(target_name))
+
+        lost_found_path = Path(mount_path) / Path('lost+found')
+        if lost_found_path.exists():
+            shutil.rmtree(lost_found_path)
+
+        cmd = ["umount", mount_path]
+        ret = subprocess.run(cmd, capture_output=True)
+        assert ret.returncode == 0
+
+    except AssertionError as e:
+        stdout = ret.stdout.decode('utf-8')
+        stderr = ret.stderr.decode('utf-8')
+        msg = f'{stdout} {stderr}'
+        raise Exception(f'failed to create provider config disk: `{image_path}`, reason: `{msg}`')
+
+    finally:
+        mount_path_temp.cleanup()
 
 
 found_system_qemu = find_qemu_on_system()

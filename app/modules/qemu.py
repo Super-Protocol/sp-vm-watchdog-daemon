@@ -1,3 +1,5 @@
+import subprocess
+import logging
 import json
 from pathlib import Path
 
@@ -6,6 +8,8 @@ from pydantic import model_validator, BaseModel, Field
 from .image_manager import image_manager
 from .models import VmQemuConfigMode
 from .config import VmConfig
+
+__logger__ = logging.getLogger(__name__)
 
 #    QEMU_COMMAND="${QEMU_PATH} \
 #         -enable-kvm \
@@ -127,7 +131,8 @@ class Qemu(BaseModel):
             raise Exception(f'failed to get bios_path for release: `{self.config.run_configuration.vm_build}`')
         return bios_path
 
-    def create_disk_image(self, target_file: str, img_type: str, size: str, remove_if_exists) -> None:
+    def create_disk_image(self, target_file: str, img_type: str, size: str) -> None:
+        __logger__.info(f'creating image: `{target_file}`, type: `{img_type}`, size: `{size}`')
         cmd = ['qemu-img', 'create', '-f', img_type, target_file, size]
         ret = subprocess.run(cmd, capture_output=True)
         if ret.returncode != 0:
@@ -135,6 +140,12 @@ class Qemu(BaseModel):
             stderr = ret.stderr.decode('utf-8')
             msg = f'{stdout} {stderr}'
             raise Exception(f'failed to create qemu img: `target_file`, reason: `{msg}`')
+
+    def get_kernel_path(self) -> str:
+        kernel_path = image_manager.get_release_kernel_path(self.config.run_configuration.vm_build)
+        if kernel_path is None:
+            raise Exception(f'failed to get kernel_path for release: `{self.config.run_configuration.vm_build}`')
+        return kernel_path
 
     def get_disks(self) -> str:
         ret = []
@@ -194,6 +205,7 @@ class Qemu(BaseModel):
         ret += ["-smp", f"cores={self.config.qemu_configuration.cores}"]
         ret += ["-m", f"{self.config.qemu_configuration.mem_gb}G"]
         ret += ["-append", self.get_kernel_cmdline()]
+        ret += ["-kernel", self.get_kernel_path()]
         ret += ["-bios", self.get_bios_path()]
         ret += self.get_machine_params()
         ret += self.get_cpu_params()
