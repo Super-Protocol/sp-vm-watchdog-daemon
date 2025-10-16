@@ -2,12 +2,14 @@ import subprocess
 import logging
 import json
 from pathlib import Path
+from hashlib import md5
+from typing import Dict
 
 from pydantic import model_validator, BaseModel, Field
 
 from .image_manager import image_manager
 from .models import VmQemuConfigMode
-from .config import VmConfig
+from .config import AppConfig, VmConfig
 
 __logger__ = logging.getLogger(__name__)
 
@@ -36,14 +38,46 @@ __logger__ = logging.getLogger(__name__)
 
 
 class Qemu(BaseModel):
+    app_config: AppConfig
     config: VmConfig
     cmd: list[str] | None = None
+    state_disk_path: Path
+    provider_config_disk_path: Path
+    provider_config_files: Dict[str, str] = Field(default_factory=dict)
+    provider_config_files_hash: bytes | None = None
 
     @classmethod
-    def load_from_config(cls, config: VmConfig) -> "Qemu":
-        c = cls(config=config)
+    def load_from_config(cls, app_config: AppConfig, config: VmConfig) -> "Qemu":
+        provider_config_disk_path = Path(config.qemu_configuration.cache_dir) / Path('provider_config.img')
+        state_disk_path = Path(config.qemu_configuration.cache_dir) / Path('state.qcow2')
+
+        c = cls(
+            app_config=app_config,
+            config=config,
+            provider_config_disk_path=provider_config_disk_path,
+            state_disk_path=state_disk_path,
+        )
         c.cmd = c.get_cmdline_from_config()
+        c.provider_config_files, c.provider_config_files_hash = c.get_provider_config_files()
+
         return c
+
+    def get_provider_config_files(self) -> (Dict[str, str], bytes):
+        tee_prov_configmap = self.config.run_configuration.provider_config.execution_controller_tee_prov_configmap
+        source_files = {"manifests/configmap.execution-controller-tee-prov.yaml": tee_prov_configmap}
+
+        if self.config.run_configuration.provider_config.sp_pki_challenge_secret is not None:
+            sp_pki_challenge_secret = self.config.run_configuration.provider_config.sp_pki_challenge_secret
+            source_files['manifests/secret.sp-pki-challenge.yaml'] = sp_pki_challenge_secret
+
+        if (
+            self.config.run_configuration.debug is True
+            and self.app_config.text_config.vm_config.authorized_keys_file is not None
+        ):
+            source_files['authorized_keys'] = self.app_config.text_config.vm_config.authorized_keys_file
+
+        source_files_hash = md5(json.dumps(source_files).encode('utf-8')).digest()
+        return source_files, source_files_hash
 
     def get_cpu_params(self) -> list[str]:
         ret = []

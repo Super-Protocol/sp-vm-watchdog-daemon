@@ -1,6 +1,7 @@
 import subprocess
 import tempfile
 import struct
+import socket
 import shutil
 import os
 from collections import defaultdict, Counter
@@ -108,7 +109,14 @@ def prepare_provider_config_disk(image_path: str, source_files: dict) -> None:
         assert ret.returncode == 0
 
         for target_name, source_path in source_files.items():
-            shutil.copy(Path(source_path), Path(mount_path) / Path(target_name))
+            src_path = Path(source_path)
+            if not src_path.exists():
+                raise Exception(f'src file: `{src_path}` not exists!')
+
+            dst_path = Path(mount_path) / Path(target_name)
+            dst_path.parent.mkdir(exist_ok=True, parents=True)
+
+            shutil.copy(src_path, dst_path)
 
         lost_found_path = Path(mount_path) / Path('lost+found')
         if lost_found_path.exists():
@@ -126,6 +134,11 @@ def prepare_provider_config_disk(image_path: str, source_files: dict) -> None:
 
     finally:
         mount_path_temp.cleanup()
+
+
+def is_port_in_use(local_addr: str, local_port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex((local_addr, local_port)) == 0
 
 
 found_system_qemu = find_qemu_on_system()

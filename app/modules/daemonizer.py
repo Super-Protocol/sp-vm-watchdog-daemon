@@ -17,6 +17,7 @@ __logger__ = logging.getLogger(__name__)
 class Daemonizer:
     vm: Qemu
     pid_file: Path
+    config_hash_file: Path
     log_file: Path | None = None
 
     def get_pid_from_file(self) -> int | None:
@@ -66,6 +67,29 @@ class Daemonizer:
             __logger__.info(f"pid: `{pid}` written to pid file `{self.pid_file}`")
         except Exception as e:
             __logger__.warning(f"failed to write pid: `{pid}` to pid file `{self.pid_file}`, reason {e}")
+
+    def get_config_hash_from_file(self) -> bytes | None:
+        try:
+            return self.config_hash_file.read_bytes()
+        except Exception as e:
+            __logger__.info(f"failed to get config hash from file `{self.config_hash_file}`, reason {e}")
+            return None
+
+    def remove_config_hash_file(self) -> None:
+        try:
+            assert self.config_hash_file.is_file() == True
+            self.config_hash_file.unlink()
+        except Exception as e:
+            __logger__.warning(f"failed to remove config hash file `{self.config_hash_file}`, reason {e}")
+
+    def write_config_hash(self, config_hash: bytes) -> None:
+        try:
+            self.config_hash_file.write_bytes(config_hash)
+            __logger__.info(f"config hash: `{config_hash}` written to file `{self.config_hash_file}`")
+        except Exception as e:
+            __logger__.warning(
+                f"failed to write config hash: `{config_hash}` to file `{self.config_hash_file}`, reason {e}"
+            )
 
     def get_process_cmdline(self) -> list[str]:
         pid = self.get_pid_from_file()
@@ -177,7 +201,8 @@ class Daemonizer:
 
         graceful_terminated = self.graceful_shutdown(pid)
         if not graceful_terminated:
-            self.kill(pid)
+            if not self.kill(pid):
+                raise Exception(f'failed to stop vm: `{self.vm.config.name}`')
 
         self.remove_pid_file()
 
@@ -194,7 +219,7 @@ class Daemonizer:
         return running_state
 
     def is_healthy(self) -> bool:
-        return False
+        return True
 
 
 if __name__ == "__main__":

@@ -62,7 +62,7 @@ class VmQemuConfig(BaseModel):
     cores: int = Field(..., gt=0)
     mem_gb: int = Field(..., gt=8)
     state_disk_size_gb: int = Field(..., gt=400)
-    gpu: str = "all"  # model_validator
+    gpu: str = "all"
     cache_dir: str | None = None
     mac_address: str = "52:54:00:12:34:56"
     ip_address: str = "0.0.0.0"
@@ -126,6 +126,13 @@ class TextConfigVmConfig(BaseModel):
             raise Exception(f"vms config dir isn't readable: `{configs_dir_path}`")
         return self
 
+    @model_validator(mode="after")
+    def check_authorized_keys_file_readable(self):
+        authorized_keys_file_path = Path(self.authorized_keys_file)
+        if not authorized_keys_file_path.is_file() or not os.access(authorized_keys_file_path, os.R_OK):
+            raise Exception(f"authorized_keys_file isn't readable: `{authorized_keys_file_path}`")
+        return self
+
 
 class TextConfig(BaseModel):
     vm_config: TextConfigVmConfig = Field(default_factory=TextConfigVmConfig)
@@ -167,7 +174,7 @@ class AppConfig(BaseModel):
             VmConfig.load(f)
             for f in sorted(Path(text_config.vm_config.configs_dir).glob("*.json"), key=lambda p: p.name)
         ]
-        [print(f.dump()) for f in vm_configs]
+        # [print(f.dump()) for f in vm_configs]
 
         return cls(text_config=text_config, vm_configs=vm_configs)
 
@@ -217,4 +224,5 @@ class AppConfig(BaseModel):
             "name",
             lambda x: x.qemu_configuration.https_port is not None,
         )
+        # TODO: check port in use (don't know in use by already running VM or by foreign process)
         return self
