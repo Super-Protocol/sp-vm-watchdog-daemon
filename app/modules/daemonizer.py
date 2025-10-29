@@ -5,6 +5,7 @@ import time
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Tuple
 
 import psutil
 
@@ -38,7 +39,7 @@ class Daemonizer:
             __logger__.info(f"failed to get process from pid: `{pid}`, not found")
             return None
 
-    def is_process_running(self, process: psutil.Process | None) -> (bool, str):
+    def is_process_running(self, process: psutil.Process | None) -> Tuple[bool, str | None]:
         allowed_statuses = (
             psutil.STATUS_RUNNING,
             psutil.STATUS_SLEEPING,
@@ -85,10 +86,10 @@ class Daemonizer:
     def write_config_hash(self, config_hash: bytes) -> None:
         try:
             self.config_hash_file.write_bytes(config_hash)
-            __logger__.info(f"config hash: `{config_hash}` written to file `{self.config_hash_file}`")
+            __logger__.info(f"config hash: `{config_hash!r}` written to file `{self.config_hash_file}`")
         except Exception as e:
             __logger__.warning(
-                f"failed to write config hash: `{config_hash}` to file `{self.config_hash_file}`, reason {e}"
+                f"failed to write config hash: `{config_hash!r}` to file `{self.config_hash_file}`, reason {e}"
             )
 
     def get_process_cmdline(self) -> list[str]:
@@ -136,7 +137,7 @@ class Daemonizer:
         enterprise_delay_timeout = 5
         vm_name = self.vm.config.name
 
-        p = subprocess.Popen(self.vm.cmd, **kwargs)
+        p = subprocess.Popen(self.vm.cmd, **kwargs)  # type: ignore[arg-type]
 
         __logger__.info(f"vm: `{vm_name}` started, waiting: `{enterprise_delay_timeout}` sec for check")
         time.sleep(enterprise_delay_timeout)  # enterprise delay
@@ -221,15 +222,3 @@ class Daemonizer:
 
     def is_healthy(self) -> bool:
         return True
-
-
-if __name__ == "__main__":
-    __logger__.getLogger().setLevel(__logger__.INFO)
-    d = Daemonizer(["/tmp/test"], Path("/tmp/test.pid"), Path("/tmp/test.log"))
-    d2 = Daemonizer(["/tmp/test"], Path("/tmp/test2.pid"), Path("/tmp/test.log"))
-    # d.start()
-    # d2.start()
-    print(d.get_process_cmdline())
-    time.sleep(1)
-    d.stop()
-    d2.stop()

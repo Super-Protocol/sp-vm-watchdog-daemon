@@ -173,7 +173,7 @@ class AppConfig(BaseModel):
         text_config = TextConfig.load_or_default(filename)
 
         vm_configs = [
-            VmConfig.load(f)
+            VmConfig.load(str(f))
             for f in sorted(Path(text_config.vm_config.configs_dir).glob("*.json"), key=lambda p: p.name)
         ]
         # [print(f.dump()) for f in vm_configs]

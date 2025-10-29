@@ -1,9 +1,9 @@
 import subprocess
 import logging
 import re
+from pathlib import Path
 
 from pydantic import BaseModel, Field
-from pathlib import Path
 
 from .utils import modprobe
 
@@ -38,7 +38,8 @@ class GpuManager:
 
     def init_modules(self) -> None:
         self.logger.info(f'initializing kernel modules: {self.requred_kernel_modules}')
-        [modprobe(m) for m in self.requred_kernel_modules]
+        for m in self.requred_kernel_modules:
+            modprobe(m)
 
     def find_gpu_on_system(self) -> list[Device]:
         self.logger.info(
@@ -96,7 +97,7 @@ class GpuManager:
         return devices
 
     def replace_driver(self, pci_path: str, driver_name: str) -> None:
-        self.logging.info(f'replacing driver for: `{pci_path}`, to: `{driver_name}`')
+        self.logger.info(f'replacing driver for: `{pci_path}`, to: `{driver_name}`')
         device = next(iter([x for x in self.devices if x.pci_path == pci_path]), None)
         if device is None:
             raise Exception(f'failed to replace driver for: `{pci_path}`, reason: device not in self.devices')
@@ -117,8 +118,7 @@ class GpuManager:
             current_driver = current_driver_link_file.resolve()
             self.logger.info(f'unbinding already binded driver: `{current_driver}` for device: `{pci_path}`')
             current_driver_unbind = current_driver / Path('unbind')
-            with current_driver_unbind.open('w') as f:
-                f.write_text(pci_path)
+            current_driver_unbind.write_text(pci_path)
 
         driver_override_path = sysfs_device_path / Path('driver_override')
         if not driver_override_path.is_file():
@@ -126,15 +126,13 @@ class GpuManager:
                 f'failed to replace driver for: `{pci_path}`, reason: path `{driver_override_path}` not found'
             )
 
-        with driver_override_path.open('w') as f:
-            f.write_text(driver_name)
+        driver_override_path.write_text(driver_name)
 
         driver_bind_path = driver_path / Path('bind')
         if not driver_bind_path.is_file():
             raise Exception(f'failed to replace driver for: `{pci_path}`, reason: path `{driver_bind_path}` not found')
 
-        with driver_bind_path.open('w') as f:
-            f.write_text(pci_path)
+        driver_bind_path.write_text(pci_path)
 
         if not current_driver_link_file.is_symlink() or current_driver_link_file.resolve() != driver_path:
             raise Exception(f'failed to replace driver for: `{pci_path}`, reason: unknown error')

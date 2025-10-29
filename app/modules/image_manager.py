@@ -28,7 +28,7 @@ class ImageManager:
         self.logger.info('getting latest github release from sp_vm_downloader')
         with grpc.insecure_channel(f"unix://{self.socket_path}") as channel:
             stub = sp_vm_downloader_pb2_grpc.SpVmDownloaderStub(channel)
-            response = stub.GetLatestGithubReleaseName(sp_vm_downloader_pb2.Empty(), timeout=120)
+            response = stub.GetLatestGithubReleaseName(sp_vm_downloader_pb2.Empty(), timeout=120)  # type: ignore[attr-defined]
             if not response.success:
                 self.logger.error(
                     f'failed to get latest github release from sp_vm_downloader, reason: `{response.msg}`'
@@ -51,7 +51,7 @@ class ImageManager:
         self.logger.info(f'getting release path for release: `{release}` from sp_vm_downloader')
         with grpc.insecure_channel(f"unix://{self.socket_path}") as channel:
             stub = sp_vm_downloader_pb2_grpc.SpVmDownloaderStub(channel)
-            response = stub.GetRelease(sp_vm_downloader_pb2.ReleaseRequest(name=release), timeout=120)
+            response = stub.GetRelease(sp_vm_downloader_pb2.ReleaseRequest(name=release), timeout=120)  # type: ignore[attr-defined]
             if not response.success:
                 self.logger.error(f'failed to get release: `{release}` from sp_vm_downloader, reason: `{response.msg}`')
                 return None

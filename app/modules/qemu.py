@@ -3,7 +3,7 @@ import logging
 import json
 from pathlib import Path
 from hashlib import md5
-from typing import Dict
+from typing import Tuple, Dict
 
 from pydantic import model_validator, BaseModel, Field
 
@@ -13,6 +13,7 @@ from .config import AppConfig, VmConfig
 from .utils import detected_cpu_cbitpos
 
 __logger__ = logging.getLogger(__name__)
+
 
 class Qemu(BaseModel):
     app_config: AppConfig
@@ -25,8 +26,8 @@ class Qemu(BaseModel):
 
     @classmethod
     def load_from_config(cls, app_config: AppConfig, config: VmConfig) -> "Qemu":
-        provider_config_disk_path = Path(config.qemu_configuration.cache_dir) / Path('provider_config.img')
-        state_disk_path = Path(config.qemu_configuration.cache_dir) / Path('state.qcow2')
+        provider_config_disk_path = Path(config.qemu_configuration.cache_dir) / Path('provider_config.img')  # type: ignore[arg-type]
+        state_disk_path = Path(config.qemu_configuration.cache_dir) / Path('state.qcow2')  # type: ignore[arg-type]
 
         c = cls(
             app_config=app_config,
@@ -39,7 +40,7 @@ class Qemu(BaseModel):
 
         return c
 
-    def get_provider_config_files(self) -> (Dict[str, str], bytes):
+    def get_provider_config_files(self) -> Tuple[Dict[str, str], bytes]:
         tee_prov_configmap = self.config.run_configuration.provider_config.execution_controller_tee_prov_configmap
         source_files = {"manifests/configmap.execution-controller-tee-prov.yaml": tee_prov_configmap}
 
@@ -105,7 +106,7 @@ class Qemu(BaseModel):
 
     def get_kernel_verify_args(self) -> list[str]:
         verity_scheme = "rootfs_verity.scheme=dm-verity"
-        verity_hash = image_manager.get_release_rootfs_hash(self.config.run_configuration.vm_build)
+        verity_hash = image_manager.get_release_rootfs_hash(self.config.run_configuration.vm_build)  # type: ignore[arg-type]
         if verity_hash is None:
             raise Exception(f'failed to get rootfs_hash for release: `{self.config.run_configuration.vm_build}`')
         verity_hash_str = f"rootfs_verity.hash={verity_hash}"
@@ -121,7 +122,6 @@ class Qemu(BaseModel):
         elif self.config.qemu_configuration.mode == VmQemuConfigMode.SEV_SNP:
             cmdline_arr += [f"build={self.config.run_configuration.vm_build}"]
 
-
         if self.config.run_configuration.debug is True:
             cmdline_arr += [
                 "console=ttyS0",
@@ -136,9 +136,9 @@ class Qemu(BaseModel):
 
     def get_bios_path(self) -> str:
         bios_path = (
-            image_manager.get_release_bios_amd_path(self.config.run_configuration.vm_build)
+            image_manager.get_release_bios_amd_path(self.config.run_configuration.vm_build)  # type: ignore[arg-type]
             if self.config.qemu_configuration.mode == VmQemuConfigMode.SEV_SNP
-            else image_manager.get_release_bios_path(self.config.run_configuration.vm_build)
+            else image_manager.get_release_bios_path(self.config.run_configuration.vm_build)  # type: ignore[arg-type]
         )
         if bios_path is None:
             raise Exception(f'failed to get bios_path for release: `{self.config.run_configuration.vm_build}`')
@@ -155,27 +155,27 @@ class Qemu(BaseModel):
             raise Exception(f'failed to create qemu img: `{target_file}`, reason: `{msg}`')
 
     def get_kernel_path(self) -> str:
-        kernel_path = image_manager.get_release_kernel_path(self.config.run_configuration.vm_build)
+        kernel_path = image_manager.get_release_kernel_path(self.config.run_configuration.vm_build)  # type: ignore[arg-type]
         if kernel_path is None:
             raise Exception(f'failed to get kernel_path for release: `{self.config.run_configuration.vm_build}`')
         return kernel_path
 
-    def get_disks(self) -> str:
+    def get_disks(self) -> list:
         ret = []
 
-        image_path = image_manager.get_release_image_path(self.config.run_configuration.vm_build)
+        image_path = image_manager.get_release_image_path(self.config.run_configuration.vm_build)  # type: ignore[arg-type]
         if image_path is None:
             raise Exception(f'failed to get image_path for release: `{self.config.run_configuration.vm_build}`')
         ret += ["-drive", f"file={image_path},if=virtio,format=raw,readonly=on"]
 
-        state_disk_path = Path(self.config.qemu_configuration.cache_dir) / Path('state.qcow2')
+        state_disk_path = Path(self.config.qemu_configuration.cache_dir) / Path('state.qcow2')  # type: ignore[arg-type]
         # this function will be calleb before we knows is VM running or need to be runned, or rerunned
         # so we just need to set path, and creating, deleting will be performed later
         # state_disk_size = f'{self.config.qemu_configuration.state_disk_size_gb}G'
         # self.create_disk_image(target_file=state_disk_path, img_type="qcow2", state_disk_size)
         ret += ["-drive", f"file={state_disk_path},if=virtio,format=qcow2"]
 
-        provider_config_disk_path = Path(self.config.qemu_configuration.cache_dir) / Path('provider_config.img')
+        provider_config_disk_path = Path(self.config.qemu_configuration.cache_dir) / Path('provider_config.img')  # type: ignore[arg-type]
         # and the same about provider_config_disk_path
         # provider_config_disk_size = '1M'
         # self.create_disk_image(target_file=provider_config_disk_path, img_type="raw", provider_config_disk_size)

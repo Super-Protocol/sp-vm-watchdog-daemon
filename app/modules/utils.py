@@ -28,7 +28,9 @@ def assert_unique_pair(
     name_getter = attrgetter(name_path)
 
     groups = defaultdict(list)
-    [groups[path_two_getter(o)].append(o) for o in objs if match_function(o)]
+    for o in objs:
+        if match_function(o):
+            groups[path_two_getter(o)].append(o)
 
     for group_key, items in groups.items():
         counts = Counter([path_one_getter(o) for o in items if match_function(o)])

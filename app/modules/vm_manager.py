@@ -34,23 +34,27 @@ class VmManager:
 
     def recreate_state_disk(self, vm: Qemu) -> None:
         if vm.state_disk_path.is_file():
-            if is_file_in_use(vm.state_disk_path):
+            if is_file_in_use(str(vm.state_disk_path)):
                 raise Exception(f"can't remove image: `{vm.state_disk_path}`, some process still using it")
             vm.state_disk_path.unlink()
 
         state_disk_size = f'{vm.config.qemu_configuration.state_disk_size_gb}G'
-        vm.create_disk_image(target_file=vm.state_disk_path, img_type="qcow2", size=state_disk_size)
+        vm.create_disk_image(target_file=str(vm.state_disk_path), img_type="qcow2", size=state_disk_size)
 
     def recreate_provider_config_disk(self, vm: Qemu) -> None:
         if vm.provider_config_disk_path.is_file():
-            if is_file_in_use(vm.provider_config_disk_path):
+            if is_file_in_use(str(vm.provider_config_disk_path)):
                 raise Exception(f"can't remove image: `{vm.provider_config_disk_path}`, some process still using it")
             vm.provider_config_disk_path.unlink()
 
         provider_config_disk_size = '1M'
-        vm.create_disk_image(target_file=vm.provider_config_disk_path, img_type="raw", size=provider_config_disk_size)
+        vm.create_disk_image(
+            target_file=str(vm.provider_config_disk_path), img_type="raw", size=provider_config_disk_size
+        )
 
-        prepare_provider_config_disk(image_path=vm.provider_config_disk_path, source_files=vm.provider_config_files)
+        prepare_provider_config_disk(
+            image_path=str(vm.provider_config_disk_path), source_files=vm.provider_config_files
+        )
 
     def start_vm(self, d: Daemonizer) -> None:
         # TODO: ensure GPU
@@ -63,7 +67,7 @@ class VmManager:
         self.recreate_provider_config_disk(d.vm)
         if not d.start():
             raise Exception(f'failed to start vm: `{d.vm.config.name}`')
-        d.write_config_hash(d.vm.provider_config_files_hash)
+        d.write_config_hash(d.vm.provider_config_files_hash)  # type: ignore[arg-type]
 
     def stop_vm(self, d: Daemonizer) -> None:
         self.logger.info(f'stopping vm: `{d.vm.config.name}`')
@@ -75,7 +79,7 @@ class VmManager:
         self.start_vm(d)
 
     def is_configuration_changed(self, d: Daemonizer) -> bool:
-        if sorted(d.vm.cmd) != sorted(d.get_process_cmdline()):
+        if sorted(d.vm.cmd) != sorted(d.get_process_cmdline()):  # type: ignore[arg-type]
             return True
         if not d.vm.provider_config_disk_path.exists():
             return False
