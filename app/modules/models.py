@@ -13,6 +13,7 @@ class VmQemuConfigMode(str, Enum):
             for line in f:
                 if line.startswith("flags"):
                     return line
+        raise Exception('failed to get CPU flags from `/proc/cpuinfo`')
 
     @staticmethod
     def _is_cpu_flag_set(cpu_flags_line: str, flag: str) -> bool:

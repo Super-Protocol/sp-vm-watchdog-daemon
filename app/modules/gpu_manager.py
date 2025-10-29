@@ -3,6 +3,7 @@ import logging
 import re
 
 from pydantic import BaseModel, Field
+from pathlib import Path
 
 from .utils import modprobe
 
@@ -115,7 +116,8 @@ class GpuManager:
         if current_driver_link_file.is_symlink():
             current_driver = current_driver_link_file.resolve()
             self.logger.info(f'unbinding already binded driver: `{current_driver}` for device: `{pci_path}`')
-            with current_driver.open('w') as f:
+            current_driver_unbind = current_driver / Path('unbind')
+            with current_driver_unbind.open('w') as f:
                 f.write_text(pci_path)
 
         driver_override_path = sysfs_device_path / Path('driver_override')

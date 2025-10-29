@@ -10,32 +10,9 @@ from pydantic import model_validator, BaseModel, Field
 from .image_manager import image_manager
 from .models import VmQemuConfigMode
 from .config import AppConfig, VmConfig
+from .utils import detected_cpu_cbitpos
 
 __logger__ = logging.getLogger(__name__)
-
-#    QEMU_COMMAND="${QEMU_PATH} \
-#         -enable-kvm \
-#         -append \"${KERNEL_CMD_LINE}\" \
-#         -drive file=${IMAGE_PATH},if=virtio,format=raw,readonly=on \
-#         -drive file=${STATE_DISK_PATH},if=virtio,format=qcow2 \
-#         -drive file=${PROVIDER_CONFIG_DISK_PATH},if=virtio,format=raw,readonly=on \
-#         -kernel ${KERNEL_PATH} \
-#         -smp cores=${VM_CPU} \
-#         -m ${VM_RAM}G \
-#         ${CPU_PARAMS} \
-#         -machine ${MACHINE_PARAMS} \
-#         ${CC_SPECIFIC_PARAMS} \
-#         ${NETWORK_SETTINGS} \
-#         -nographic \
-#         ${CC_PARAMS} \
-#         -bios ${BIOS_PATH} \
-#         -vga none \
-#         -nodefaults \
-#         -serial stdio \
-#         -device vhost-vsock-pci,guest-cid=${GUEST_CID} \
-#        ${GPU_PASSTHROUGH} \
-#        "
-
 
 class Qemu(BaseModel):
     app_config: AppConfig
@@ -105,7 +82,7 @@ class Qemu(BaseModel):
         ret = []
         mode = self.config.qemu_configuration.mode
         if mode == VmQemuConfigMode.TDX:
-            ret += ["-object", f"memory-backend-ram,id=mem0,size=${self.config.qemu_configuration.mem_gb}G"]
+            ret += ["-object", f"memory-backend-ram,id=mem0,size={self.config.qemu_configuration.mem_gb}G"]
 
             VMADDR_CID_HOST = 2  # https://man7.org/linux/man-pages/man7/vsock.7.html
             obj = {
@@ -115,7 +92,6 @@ class Qemu(BaseModel):
             }
             ret += ["-object", json.dumps(obj)]
 
-            ret += ["clearcpuid=mtrr"]
             ret += [
                 "-device",
                 f"vhost-vsock-pci,guest-cid={self.config.qemu_configuration.guest_cid}",
@@ -140,8 +116,11 @@ class Qemu(BaseModel):
         cmdline_arr += ["root=LABEL=rootfs"]
         cmdline_arr += self.get_kernel_verify_args()
 
-        if self.config.qemu_configuration.mode == VmQemuConfigMode.SEV_SNP:
+        if self.config.qemu_configuration.mode == VmQemuConfigMode.TDX:
+            cmdline_arr += ["clearcpuid=mtrr"]
+        elif self.config.qemu_configuration.mode == VmQemuConfigMode.SEV_SNP:
             cmdline_arr += [f"build={self.config.run_configuration.vm_build}"]
+
 
         if self.config.run_configuration.debug is True:
             cmdline_arr += [
@@ -173,7 +152,7 @@ class Qemu(BaseModel):
             stdout = ret.stdout.decode('utf-8')
             stderr = ret.stderr.decode('utf-8')
             msg = f'{stdout} {stderr}'
-            raise Exception(f'failed to create qemu img: `target_file`, reason: `{msg}`')
+            raise Exception(f'failed to create qemu img: `{target_file}`, reason: `{msg}`')
 
     def get_kernel_path(self) -> str:
         kernel_path = image_manager.get_release_kernel_path(self.config.run_configuration.vm_build)

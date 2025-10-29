@@ -32,7 +32,7 @@ def assert_unique_pair(
 
     for group_key, items in groups.items():
         counts = Counter([path_one_getter(o) for o in items if match_function(o)])
-        dupes = [o for o in objs if counts[path_one_getter(o)] > 1 and match_function(o)]
+        dupes = [o for o in items if counts[path_one_getter(o)] > 1 and match_function(o)]
         if dupes:
             dupes_str = ', '.join([name_getter(o) for o in dupes])
             raise Exception(f"duplicate path: `{path_one}` in group: `{group_key}` found for: `{dupes_str}`")

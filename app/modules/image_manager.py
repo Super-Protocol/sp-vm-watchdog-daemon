@@ -21,15 +21,15 @@ class ImageManager:
     def update_cached_latest_github_release(self) -> bool:
         if not Path(self.socket_path).is_socket():
             self.logger.error(
-                f'failed to get latest github release from sp_vm_downloader because sp_vm_downloader is down'
+                'failed to get latest github release from sp_vm_downloader because sp_vm_downloader is down'
             )
             return False
 
-        self.logger.info(f'getting latest github release from sp_vm_downloader')
+        self.logger.info('getting latest github release from sp_vm_downloader')
         with grpc.insecure_channel(f"unix://{self.socket_path}") as channel:
             stub = sp_vm_downloader_pb2_grpc.SpVmDownloaderStub(channel)
-            response = stub.GetLatestGithubReleaseName(sp_vm_downloader_pb2.Empty())
-            if response.success != True:
+            response = stub.GetLatestGithubReleaseName(sp_vm_downloader_pb2.Empty(), timeout=120)
+            if not response.success:
                 self.logger.error(
                     f'failed to get latest github release from sp_vm_downloader, reason: `{response.msg}`'
                 )
@@ -51,11 +51,11 @@ class ImageManager:
         self.logger.info(f'getting release path for release: `{release}` from sp_vm_downloader')
         with grpc.insecure_channel(f"unix://{self.socket_path}") as channel:
             stub = sp_vm_downloader_pb2_grpc.SpVmDownloaderStub(channel)
-            response = stub.GetRelease(sp_vm_downloader_pb2.ReleaseRequest(name=release))
-            if response.success != True:
+            response = stub.GetRelease(sp_vm_downloader_pb2.ReleaseRequest(name=release), timeout=120)
+            if not response.success:
                 self.logger.error(f'failed to get release: `{release}` from sp_vm_downloader, reason: `{response.msg}`')
-            else:
-                self.release_paths[release] = response.path
+                return None
+            self.release_paths[release] = response.path
             return response.path
 
     def get_release_image_path(self, release: str) -> str | None:

@@ -103,9 +103,9 @@ class Daemonizer:
         try:
             process.kill()
         except Exception as e:
-            __logger__.warning(f"failed to remove process, pid: `{p.pid}`, reason {e}")
+            __logger__.warning(f"failed to remove process, pid: `{process.pid}`, reason {e}")
 
-    def start(self) -> None:
+    def start(self) -> bool:
         pid = self.get_pid_from_file()
         if pid is not None:
             process = self.get_process_from_pid(pid)
@@ -113,7 +113,7 @@ class Daemonizer:
                 running_state, state = self.is_process_running(process)
                 if running_state:
                     __logger__.info(f"attempting to start process wich already started, pid: `{pid}`, state: `{state}`")
-                    return
+                    return False
                 __logger__.warning(f"found procrss: `{pid}` in a wrong state: `{state}`, removing")
                 self.remove_stopped_process(process)
             self.remove_pid_file()
@@ -143,7 +143,7 @@ class Daemonizer:
 
         if p.poll() is not None:
             __logger__.error(f'failed to start vm: `{vm_name}`, check log file: `{self.log_file}`')
-            return
+            return False
 
         self.write_pid_file(p.pid)
 
@@ -151,6 +151,7 @@ class Daemonizer:
             log_f.close()  # the decriptors will alive in a child process
 
         __logger__.info(f"vm: `{vm_name}` started successfully")
+        return True
 
     def graceful_shutdown(self, pid: int, timeout: int = 120) -> bool:
         __logger__.info(f"sending sigterm to process with pid: `{pid}`")

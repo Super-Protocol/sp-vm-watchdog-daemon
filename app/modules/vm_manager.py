@@ -59,10 +59,11 @@ class VmManager:
         if d.is_running():
             raise Exception(f'vm: `{d.vm.config.name}` is already running')
 
-        d.write_config_hash(d.vm.provider_config_files_hash)
         self.recreate_state_disk(d.vm)
         self.recreate_provider_config_disk(d.vm)
-        d.start()
+        if not d.start():
+            raise Exception(f'failed to start vm: `{d.vm.config.name}`')
+        d.write_config_hash(d.vm.provider_config_files_hash)
 
     def stop_vm(self, d: Daemonizer) -> None:
         self.logger.info(f'stopping vm: `{d.vm.config.name}`')
@@ -96,16 +97,19 @@ class VmManager:
         self.logger.info(f'polling interval is `{polling_interval}` sec')
         while True:
             for d in self.vms:
-                self.logger.info(f'checking vm: `{d.vm.config.name}`')
-                if not d.is_running():
-                    self.logger.info(f"vm: `{d.vm.config.name}` isn't running, starting")
-                    self.start_vm(d)
-                elif self.is_configuration_changed(d):
-                    self.logger.info(f"vm: `{d.vm.config.name}` parameters changed, restarting")
-                    self.restart_vm(d)
-                elif not d.is_healthy():
-                    self.logger.info(f"vm: `{d.vm.config.name}` isn't healthy, restarting")
-                    self.restart_vm(d)
-                else:
-                    self.logger.info(f'vm: `{d.vm.config.name}` is ok')
+                try:
+                    self.logger.info(f'checking vm: `{d.vm.config.name}`')
+                    if not d.is_running():
+                        self.logger.info(f"vm: `{d.vm.config.name}` isn't running, starting")
+                        self.start_vm(d)
+                    elif self.is_configuration_changed(d):
+                        self.logger.info(f"vm: `{d.vm.config.name}` parameters changed, restarting")
+                        self.restart_vm(d)
+                    elif not d.is_healthy():
+                        self.logger.info(f"vm: `{d.vm.config.name}` isn't healthy, restarting")
+                        self.restart_vm(d)
+                    else:
+                        self.logger.info(f'vm: `{d.vm.config.name}` is ok')
+                except Exception as e:
+                    self.logger.expection(e)
             time.sleep(polling_interval)

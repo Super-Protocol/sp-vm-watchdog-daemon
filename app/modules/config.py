@@ -128,6 +128,8 @@ class TextConfigVmConfig(BaseModel):
 
     @model_validator(mode="after")
     def check_authorized_keys_file_readable(self):
+        if self.authorized_keys_file is None:
+            return self
         authorized_keys_file_path = Path(self.authorized_keys_file)
         if not authorized_keys_file_path.is_file() or not os.access(authorized_keys_file_path, os.R_OK):
             raise Exception(f"authorized_keys_file isn't readable: `{authorized_keys_file_path}`")
