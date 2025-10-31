@@ -1,0 +1,3 @@
+[submodule "lib/sp-vm-proto"]
+	path = lib/sp-vm-proto
+	url = https://github.com/Super-Protocol/sp-vm-proto.git
