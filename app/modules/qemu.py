@@ -10,7 +10,7 @@ from pydantic import model_validator, BaseModel, Field
 from .image_manager import image_manager
 from .models import VmQemuConfigMode
 from .config import AppConfig, VmConfig
-from .utils import detected_cpu_cbitpos, snp_vcpu, phys_bits
+from .utils import detected_cpu_cbitpos, phys_bits, snp_vcpu
 
 __logger__ = logging.getLogger(__name__)
 

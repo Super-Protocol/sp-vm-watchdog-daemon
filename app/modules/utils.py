@@ -3,8 +3,8 @@ import tempfile
 import struct
 import socket
 import shutil
-import os
 import re
+import os
 from collections import defaultdict, Counter
 from operator import attrgetter
 from pathlib import Path
@@ -82,7 +82,8 @@ def get_cpu_cbitpos() -> int:
 
     return ret_ebx & 0x3F
 
-def get_cpu_model() -> str:
+
+def get_snp_vcpu() -> str:
     cpu_model = None
     with open('/proc/cpuinfo', 'r') as f:
         for line in f.readlines():
@@ -98,6 +99,7 @@ def get_cpu_model() -> str:
         return "EPYC-v3"
     return "EPYC-v4"
 
+
 def get_phys_bits() -> str:
     line_address_sizes = None
     with open('/proc/cpuinfo', 'r') as f:
@@ -109,11 +111,13 @@ def get_phys_bits() -> str:
         raise Exception(f'failed to parse address sizes from /proc/cpuinfo')
 
     x_bits_virtual_pattern = re.compile(r'(?:\d+) bits physical, (\d+) bits virtual')
-    virtual_bits = x_bits_virtual_pattern.match(line_address_sizes).group(1)
-    if virtual_bits is None:
+    x_bits_virtual_pattern_match = x_bits_virtual_pattern.match(line_address_sizes)
+    if x_bits_virtual_pattern_match is None:
         raise Exception(f'failed to parse virtual bits from line: `{line_address_sizes}`')
 
-    return 52 if int(virtual_bits) > 52 else virtual_bits
+    virtual_bits = x_bits_virtual_pattern_match.group(1)
+    return "52" if int(virtual_bits) > 52 else virtual_bits
+
 
 def is_file_in_use(path: str) -> bool:
     cmd = ['lsof', path]
