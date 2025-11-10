@@ -10,7 +10,7 @@ from pydantic import model_validator, BaseModel, Field
 from .image_manager import image_manager
 from .models import VmQemuConfigMode
 from .config import AppConfig, VmConfig
-from .utils import detected_cpu_cbitpos
+from .utils import detected_cpu_cbitpos, snp_vcpu, phys_bits
 
 __logger__ = logging.getLogger(__name__)
 
@@ -63,7 +63,7 @@ class Qemu(BaseModel):
         if mode == VmQemuConfigMode.TDX:
             ret += ["-cpu", "host"]
         elif mode == VmQemuConfigMode.SEV_SNP:
-            ret += ["-cpu", "EPYC-Milan"]
+            ret += ["-cpu", f"{snp_vcpu},phys-bits={phys_bits}"]
         else:
             ret += ["-cpu", "host"]
         return ret
@@ -120,7 +120,7 @@ class Qemu(BaseModel):
         if self.config.qemu_configuration.mode == VmQemuConfigMode.TDX:
             cmdline_arr += ["clearcpuid=mtrr"]
         elif self.config.qemu_configuration.mode == VmQemuConfigMode.SEV_SNP:
-            cmdline_arr += [f"build={self.config.run_configuration.vm_build}"]
+            cmdline_arr += [f"build={self.config.run_configuration.vm_build}", "pci=realloc,nocrs"]
 
         if self.config.run_configuration.debug is True:
             cmdline_arr += [
