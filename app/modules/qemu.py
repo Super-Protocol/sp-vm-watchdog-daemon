@@ -196,6 +196,10 @@ class Qemu(BaseModel):
         if https_port is not None:
             port_forward_arr += [f"hostfwd=tcp:{ip_addr}:{https_port}-:443"]
 
+        wg_port = self.config.qemu_configuration.wg_port
+        if wg_port is not None:
+            port_forward_arr += [f"hostfwd=udp:127.0.0.1:{wg_port}-:51820"]
+
         if self.config.run_configuration.debug is True:
             ssh_port = self.config.qemu_configuration.ssh_port
             port_forward_arr += [f"hostfwd=tcp:127.0.0.1:{ssh_port}-:22"]

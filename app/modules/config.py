@@ -67,6 +67,7 @@ class VmQemuConfig(BaseModel):
     mac_address: str = "52:54:00:12:34:56"
     ip_address: str = "0.0.0.0"
     ssh_port: int = 2222
+    wg_port: int = 51820
     http_port: int | None = None
     https_port: int | None = None
     guest_cid: int | None = None
@@ -206,6 +207,7 @@ class AppConfig(BaseModel):
         utils.assert_unique(
             self.vm_configs, "qemu_configuration.ssh_port", "name", lambda x: x.run_configuration.debug == True
         )
+        utils.assert_unique(self.vm_configs, "qemu_configuration.wg_port", "name")
         utils.assert_unique(
             self.vm_configs,
             "qemu_configuration.guest_cid",
