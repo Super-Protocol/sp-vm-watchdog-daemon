@@ -8,6 +8,7 @@ from typing import Tuple, Dict
 from pydantic import model_validator, BaseModel, Field
 
 from .image_manager import image_manager
+from .gpu_manager import gpu_manager, Device
 from .models import VmQemuConfigMode
 from .config import AppConfig, VmConfig
 from .utils import detected_cpu_cbitpos, phys_bits, snp_vcpu
@@ -23,6 +24,7 @@ class Qemu(BaseModel):
     provider_config_disk_path: Path
     provider_config_files: Dict[str, str] = Field(default_factory=dict)
     provider_config_files_hash: bytes | None = None
+    pci_device_count: int = 0
 
     @classmethod
     def load_from_config(cls, app_config: AppConfig, config: VmConfig) -> "Qemu":
@@ -66,6 +68,32 @@ class Qemu(BaseModel):
             ret += ["-cpu", f"{snp_vcpu},phys-bits={phys_bits}"]
         else:
             ret += ["-cpu", "host"]
+        return ret
+
+    def get_gpu_pci_device_param(self, devices: list[Device]) -> list[str]:
+        ret = []
+        chassis_index = self.pci_device_count + 1
+        ret += ["-fw_cfg", "name=opt/ovmf/X-PciMmio64,string=262144"]
+        mode = self.config.qemu_configuration.mode
+        for device in devices:
+            ret += ["-device", f"pcie-root-port,id=pci.{chassis_index},bus=pcie.0,chassis={chassis_index}"]
+            if mode == VmQemuConfigMode.TDX or mode == VmQemuConfigMode.SEV_SNP:
+                ret += [
+                    "-object",
+                    f"iommufd,id=iommufd{chassis_index}",
+                    "-device",
+                    f"vfio-pci,host={device.pci_path},bus=pci.{chassis_index},iommufd=iommufd{chassis_index},romfile=",
+                ]
+            else:
+                ret += ["-device", f"vfio-pci,host={device.pci_path},bus=pci.{chassis_index}"]
+            self.pci_device_count += 1
+        return ret
+
+    def get_gpu_params(self) -> list[str]:
+        ret = []
+        self.pci_device_count = 0
+        ret += self.get_gpu_pci_device_param(gpu_manager.gpu_devices)
+        # ret += self.get_gpu_pci_device_param(gpu_manager.nvlink_devices)
         return ret
 
     def get_machine_params(self) -> list[str]:
@@ -226,6 +254,7 @@ class Qemu(BaseModel):
         ret += ["-bios", self.get_bios_path()]
         ret += self.get_machine_params()
         ret += self.get_cpu_params()
+        ret += self.get_gpu_params()
         ret += self.get_cpu_specific_args()
         ret += self.get_disks()
         ret += self.get_network_args()
