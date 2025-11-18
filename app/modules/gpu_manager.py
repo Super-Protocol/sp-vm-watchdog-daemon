@@ -1,11 +1,18 @@
 import subprocess
 import logging
+import sys
 import re
+import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 from .utils import modprobe
+
+# gpu_admin_tools_dir = Path(os.path.dirname(__file__)).parent.parent / Path('lib/gpu_admin_tools')
+# sys.path.insert(0, gpu_admin_tools_dir)
+# print(sys.path)
+# from . import nvidia_gpu_tools
 
 
 class Device(BaseModel):
@@ -150,7 +157,7 @@ class GpuManager:
 
     def replace_drivers_to_vfio(self, devices: list[Device]) -> None:
         for device in devices:
-            if device.driver_in_use is not "vfio-pci":
+            if device.driver_in_use != "vfio-pci":
                 self.replace_driver(device, "vfio-pci")
 
 

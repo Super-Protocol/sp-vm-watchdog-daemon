@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import model_validator, BaseModel, Field
 
 from .image_manager import image_manager
+from .gpu_manager import gpu_manager
 from .models import detected_cpu_type, VmQemuConfigMode
 from . import utils
 
@@ -62,7 +63,7 @@ class VmQemuConfig(BaseModel):
     cores: int = Field(..., gt=0)
     mem_gb: int = Field(..., gt=8)
     state_disk_size_gb: int = Field(..., gt=400)
-    gpu: str = "all"
+    gpus: list[str] | None = None
     cache_dir: str | None = None
     mac_address: str = "52:54:00:12:34:56"
     ip_address: str = "0.0.0.0"
@@ -112,6 +113,18 @@ class VmConfig(BaseModel):
             vm_cache_dir = Path('/var/lib/sp/watchdog/cache') / Path(self.name)
             vm_cache_dir.mkdir(exist_ok=True, parents=True)
             self.qemu_configuration.cache_dir = str(vm_cache_dir)
+        return self
+
+    @model_validator(mode="after")
+    def check_gpu_present(self):
+        if self.qemu_configuration.gpus is None:
+            return self
+
+        for gpu in self.qemu_configuration.gpus:
+            found_gpu = next((g for g in gpu_manager.gpu_devices if g.pci_path == gpu), None)
+            if found_gpu is None:
+                raise Exception(f"gpu: `{gpu}` for vm: `{self.name}` specified in config but not present in system")
+
         return self
 
 
@@ -207,7 +220,8 @@ class AppConfig(BaseModel):
         utils.assert_unique(
             self.vm_configs, "qemu_configuration.ssh_port", "name", lambda x: x.run_configuration.debug == True
         )
-        utils.assert_unique(self.vm_configs, "qemu_configuration.wg_port", "name")
+        utils.assert_unique_pair(self.vm_configs, "qemu_configuration.wg_port", "qemu_configuration.ip_address", "name")
+        # TODO: add gpu validator
         utils.assert_unique(
             self.vm_configs,
             "qemu_configuration.guest_cid",

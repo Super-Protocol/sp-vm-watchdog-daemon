@@ -19,6 +19,8 @@ class ImageManager:
         self.release_paths = dict()
 
     def update_cached_latest_github_release(self) -> bool:
+        self.cached_latest_github_release = "build-270"
+        return True
         if not Path(self.socket_path).is_socket():
             self.logger.error(
                 'failed to get latest github release from sp_vm_downloader because sp_vm_downloader is down'
@@ -38,6 +40,8 @@ class ImageManager:
             return response.success
 
     def get_release_path(self, release: str) -> str | None:
+        self.release_paths[release] = "/var/lib/sp/images/build-270"
+        return self.release_paths[release]
         release_path = self.release_paths.get(release)
         if release_path is not None:
             return release_path

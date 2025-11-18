@@ -70,8 +70,12 @@ class Qemu(BaseModel):
             ret += ["-cpu", "host"]
         return ret
 
-    def get_gpu_pci_device_param(self, devices: list[Device]) -> list[str]:
+    def get_pci_device_param(self, devices: list[Device]) -> list[str]:
         ret = []
+
+        if len(devices) == 0:
+            return ret
+
         chassis_index = self.pci_device_count + 1
         ret += ["-fw_cfg", "name=opt/ovmf/X-PciMmio64,string=262144"]
         mode = self.config.qemu_configuration.mode
@@ -92,8 +96,8 @@ class Qemu(BaseModel):
     def get_gpu_params(self) -> list[str]:
         ret = []
         self.pci_device_count = 0
-        ret += self.get_gpu_pci_device_param(gpu_manager.gpu_devices)
-        # ret += self.get_gpu_pci_device_param(gpu_manager.nvlink_devices)
+        ret += self.get_pci_device_param(self.config.qemu_configuration.gpus)
+        # ret += self.get_pci_device_param(gpu_manager.nvlink_devices)
         return ret
 
     def get_machine_params(self) -> list[str]:
