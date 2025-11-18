@@ -59,17 +59,6 @@ class GpuManager:
 
         res = jc.parse('lspci', stdout)
 
-        # devices = [
-        #    Device(
-        #        name=d.get('device'),
-        #        pci_path=f'0000:{d.get("slot")}',
-        #        vendor=d.get('vendor'),
-        #        driver_in_use=d.get('driver', None),
-        #    )
-        #    for d in res
-        #    if d.get('class', None) == device_class_name
-        # ]
-
         devices = []
         for d in res:
             if d.get('class', None) != device_class_name:
