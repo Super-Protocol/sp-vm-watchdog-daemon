@@ -36,7 +36,6 @@ class GpuManager:
         self.logger = logging.getLogger(__name__)
 
         self.gpu_devices = self.find_pci_devices("10de:", "3D controller")
-        print(self.gpu_devices)
 
         self.init_modules()
         self.replace_drivers_to_vfio(self.gpu_devices)
@@ -60,16 +59,33 @@ class GpuManager:
 
         res = jc.parse('lspci', stdout)
 
-        devices = [
-            Device(
-                name=d.get('device'),
-                pci_path=d.get('slot'),
-                vendor=d.get('vendor'),
-                driver_in_use=d.get('driver', None),
+        # devices = [
+        #    Device(
+        #        name=d.get('device'),
+        #        pci_path=f'0000:{d.get("slot")}',
+        #        vendor=d.get('vendor'),
+        #        driver_in_use=d.get('driver', None),
+        #    )
+        #    for d in res
+        #    if d.get('class', None) == device_class_name
+        # ]
+
+        devices = []
+        for d in res:
+            if d.get('class', None) != device_class_name:
+                continue
+
+            domain_int = d.get("domain_int")
+            domain_hex = f"{domain_int:04x}"
+            slot = d.get("slot")
+            devices.append(
+                Device(
+                    name=d.get('device'),
+                    pci_path=f"{domain_hex}:{slot}",
+                    vendor=d.get('vendor'),
+                    driver_in_use=d.get('driver', None),
+                )
             )
-            for d in res
-            if d.get('class', None) == device_class_name
-        ]
 
         if len(devices):
             self.logger.info(f'found {len(devices)} devices: `{devices}`')
@@ -79,28 +95,29 @@ class GpuManager:
     def replace_driver(self, device: Device, driver_name: str) -> None:
         self.logger.info(f'replacing driver for: `{device.pci_path}`, to: `{driver_name}`')
         driver_path = Path('/sys/bus/pci/drivers') / Path(driver_name)
+        device_pci_path = device.pci_path
         if not driver_path.is_dir():
             raise Exception(
-                f'failed to replace driver for: `{device.pci_path}`, reason: driver path `{driver_path}` not found'
+                f'failed to replace driver for: `{device_pci_path}`, reason: driver path `{driver_path}` not found'
             )
-        sysfs_device_path = Path(f'/sys/bus/pci/devices/{device.pci_path}')
+        sysfs_device_path = Path(f'/sys/bus/pci/devices/{device_pci_path}')
         if not sysfs_device_path.is_dir():
             raise Exception(
-                f'failed to replace driver for: `{device.pci_path}`, reason: path `{sysfs_device_path}` not found'
+                f'failed to replace driver for: `{device_pci_path}`, reason: path `{sysfs_device_path}` not found'
             )
 
         current_driver_link_file = sysfs_device_path / Path('driver')
         # https://code.google.com/archive/p/pci-hacking/wikis/bind_Uunbind_PCI.wiki
         if current_driver_link_file.is_symlink():
             current_driver = current_driver_link_file.resolve()
-            self.logger.info(f'unbinding already binded driver: `{current_driver}` for device: `{device.pci_path}`')
+            self.logger.info(f'unbinding already binded driver: `{current_driver}` for device: `{device_pci_path}`')
             current_driver_unbind = current_driver / Path('unbind')
-            current_driver_unbind.write_text(device.pci_path)
+            current_driver_unbind.write_text(device_pci_path)
 
         driver_override_path = sysfs_device_path / Path('driver_override')
         if not driver_override_path.is_file():
             raise Exception(
-                f'failed to replace driver for: `{device.pci_path}`, reason: path `{driver_override_path}` not found'
+                f'failed to replace driver for: `{device_pci_path}`, reason: path `{driver_override_path}` not found'
             )
 
         driver_override_path.write_text(driver_name)
@@ -108,13 +125,13 @@ class GpuManager:
         driver_bind_path = driver_path / Path('bind')
         if not driver_bind_path.is_file():
             raise Exception(
-                f'failed to replace driver for: `{device.pci_path}`, reason: path `{driver_bind_path}` not found'
+                f'failed to replace driver for: `{device_pci_path}`, reason: path `{driver_bind_path}` not found'
             )
 
-        driver_bind_path.write_text(device.pci_path)
+        driver_bind_path.write_text(device_pci_path)
 
         if not current_driver_link_file.is_symlink() or current_driver_link_file.resolve() != driver_path:
-            raise Exception(f'failed to replace driver for: `{device.pci_path}`, reason: unknown error')
+            raise Exception(f'failed to replace driver for: `{device_pci_path}`, reason: unknown error')
 
         device.driver_in_use = driver_name
 

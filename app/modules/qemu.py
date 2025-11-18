@@ -79,7 +79,11 @@ class Qemu(BaseModel):
         chassis_index = self.pci_device_count + 1
         ret += ["-fw_cfg", "name=opt/ovmf/X-PciMmio64,string=262144"]
         mode = self.config.qemu_configuration.mode
-        for device in devices:
+        for device_pci_path in devices:
+            device = next((g for g in gpu_manager.gpu_devices if g.pci_path == device_pci_path), None)
+            if device is None:
+                raise Exception(f'failed to found gpu: `{device_pci_path}`')
+
             ret += ["-device", f"pcie-root-port,id=pci.{chassis_index},bus=pcie.0,chassis={chassis_index}"]
             if mode == VmQemuConfigMode.TDX or mode == VmQemuConfigMode.SEV_SNP:
                 ret += [
