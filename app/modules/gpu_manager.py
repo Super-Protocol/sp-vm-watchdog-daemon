@@ -5,6 +5,7 @@ import re
 import os
 from pathlib import Path
 
+import jc
 from pydantic import BaseModel, Field
 
 from .utils import modprobe
@@ -17,10 +18,9 @@ from .utils import modprobe
 
 class Device(BaseModel):
     name: str
+    vendor: str
     pci_path: str
-    subsystem: str | None = None
     driver_in_use: str | None = None
-    kernel_modules: list[str] = Field(default_factory=list)
 
 
 class GpuManager:
@@ -36,6 +36,7 @@ class GpuManager:
         self.logger = logging.getLogger(__name__)
 
         self.gpu_devices = self.find_pci_devices("10de:", "3D controller")
+        print(self.gpu_devices)
 
         self.init_modules()
         self.replace_drivers_to_vfio(self.gpu_devices)
@@ -49,7 +50,7 @@ class GpuManager:
         self.logger.info(
             f'searching pci devices on system, with class: `{device_class_name}` and vendor id: `{vendor_id}`'
         )
-        ret = subprocess.run(["lspci", "-nnk", "-d", vendor_id], capture_output=True)
+        ret = subprocess.run(["lspci", "-nnmmkv", "-d", vendor_id], capture_output=True)
         stdout = ret.stdout.decode('utf-8')
 
         if ret.returncode != 0:
@@ -57,56 +58,18 @@ class GpuManager:
             msg = f'{stdout} {stderr}'
             raise Exception(f'failed to get devices from `lscpi`: `target_file`, reason: `{msg}`')
 
-        devices = []
+        res = jc.parse('lspci', stdout)
 
-        lines = stdout.splitlines()
-        found_device = None
-        # why lscpi has no json output format options?....((9(99(9(
-        for line in lines:
-            # first line in device block
-            match = self.lspci_regex_main.match(line)
-            if match:
-                found_device = None
-                if device_class_name not in line:
-                    continue
-
-                pci_path_match = match.group('pci_address')
-                if pci_path_match is None:
-                    raise Exception(
-                        f'failed to extract pci_address from: `{line}`, reason: pci_address group not found'
-                    )
-
-                device_name_match = match.group('device_name')
-                if device_name_match is None:
-                    raise Exception(
-                        f'failed to extract device_name from: `{line}`, reason: device_name group not found'
-                    )
-
-                pci_path = f"0000:{pci_path_match}"
-                found_device = Device(name=device_name_match, pci_path=pci_path)
-                continue
-
-            if found_device is None:
-                continue
-
-            # second
-            subsystem_match = self.lspci_regex_subsystem.match(line)
-            if subsystem_match:
-                found_device.subsystem = subsystem_match.group('subsystem')
-                continue
-
-            # third
-            driver_match = self.lspci_regex_driver.match(line)
-            if driver_match:
-                found_device.driver_in_use = driver_match.group('driver')
-                continue
-
-            # last line in device block
-            kernel_modules_match = self.lspci_regex_modules.match(line)
-            if kernel_modules_match:
-                found_device.kernel_modules = kernel_modules_match.group('modules').split(', ')
-                devices.append(found_device)
-                found_device = None
+        devices = [
+            Device(
+                name=d.get('device'),
+                pci_path=d.get('slot'),
+                vendor=d.get('vendor'),
+                driver_in_use=d.get('driver', None),
+            )
+            for d in res
+            if d.get('class', None) == device_class_name
+        ]
 
         if len(devices):
             self.logger.info(f'found {len(devices)} devices: `{devices}`')

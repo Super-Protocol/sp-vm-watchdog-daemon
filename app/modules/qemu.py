@@ -70,10 +70,10 @@ class Qemu(BaseModel):
             ret += ["-cpu", "host"]
         return ret
 
-    def get_pci_device_param(self, devices: list[Device]) -> list[str]:
+    def get_pci_device_param(self, devices: list[Device] | None) -> list[str]:
         ret = []
 
-        if len(devices) == 0:
+        if devices is None or len(devices) == 0:
             return ret
 
         chassis_index = self.pci_device_count + 1
