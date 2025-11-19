@@ -10,11 +10,6 @@ from pydantic import BaseModel, Field
 
 from .utils import modprobe
 
-# gpu_admin_tools_dir = Path(os.path.dirname(__file__)).parent.parent / Path('lib/gpu_admin_tools')
-# sys.path.insert(0, gpu_admin_tools_dir)
-# print(sys.path)
-# from . import nvidia_gpu_tools
-
 
 class Device(BaseModel):
     name: str
@@ -34,6 +29,13 @@ class GpuManager:
 
         self.requred_kernel_modules = ('vfio', 'vfio-pci')
         self.logger = logging.getLogger(__name__)
+
+        gpu_admin_tools_dir = Path(os.path.dirname(__file__)).parent.parent / Path('lib/gpu_admin_tools')
+        self.gpu_admin_tools = gpu_admin_tools_dir / Path('nvidia_gpu_tools.py')
+        if not self.gpu_admin_tools.is_file():
+            raise Exception(
+                f'failed to init GpuManager, reason: gpu_admin_tools not found at: `{self.gpu_admin_tools}`'
+            )
 
         self.gpu_devices = self.find_pci_devices("10de:", "3D controller")
 

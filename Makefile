@@ -66,6 +66,7 @@ $(OUTPUT)/$(APP_NAME).deb: $(SOURCES) $(PROTO_DST)
 	mkdir -p $(OUTPUT)/$(APP_NAME)/usr/bin
 	mkdir -p $(OUTPUT)/$(APP_NAME)/usr/bin/sp-vm-watchdog-daemon/app
 	cp -Lr $(SOURCE) $(OUTPUT)/$(APP_NAME)/usr/bin/sp-vm-watchdog-daemon/
+	cp -Lr $(LIB) $(OUTPUT)/$(APP_NAME)/usr/bin/sp-vm-watchdog-daemon/
 	cp $(MISC)/sp-vm-watchdog-daemon.service $(OUTPUT)/$(APP_NAME)/etc/systemd/system/sp-vm-watchdog-daemon.service
 	VERSION="${VERSION}" envsubst '$$VERSION' < $(MISC)/control > $(OUTPUT)/$(APP_NAME)/DEBIAN/control
 	cp $(MISC)/postinst $(OUTPUT)/$(APP_NAME)/DEBIAN/
