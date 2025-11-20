@@ -114,5 +114,5 @@ class VmManager:
                     else:
                         self.logger.info(f'vm: `{d.vm.config.name}` is ok')
                 except Exception as e:
-                    self.logger.expection(e)
+                    self.logger.exception(e)
             time.sleep(polling_interval)
