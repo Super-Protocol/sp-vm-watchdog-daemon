@@ -78,19 +78,19 @@ $(OUTPUT)/$(APP_NAME).deb: $(SOURCES) $(PROTO_DST)
 format: $(VENV_FILE)
 	@source $(VENV_FILE) && \
 		python3 -m isort --profile black --length-sort --reverse-sort \
-			--multi-line 3 --skip-glob '*_pb2.py' --skip-glob '*_pb2_grpc.py' .
+			--multi-line 3 --skip-glob '*_pb2.py' --skip-glob '*_pb2_grpc.py' app
 	@source $(VENV_FILE) && \
 		python3 -m black --skip-string-normalization \
-			--line-length=120 --extend-exclude '.*_pb2(_grpc)?\.py' .
+			--line-length=120 --extend-exclude '.*_pb2(_grpc)?\.py' app
 
 .PHONY: lint
 lint: $(VENV_FILE) $(PROTO_DST)
 	@source $(VENV_FILE) && \
 		python3 -m isort --profile black --length-sort --reverse-sort \
-			--multi-line 3 --skip-glob '*_pb2.py' --skip-glob '*_pb2_grpc.py' --check --diff .
+			--multi-line 3 --skip-glob '*_pb2.py' --skip-glob '*_pb2_grpc.py' --check --diff app
 	@source $(VENV_FILE) && \
 		python3 -m black --skip-string-normalization \
-			--line-length=120 --extend-exclude '.*_pb2(_grpc)?\.py' --check --diff .
+			--line-length=120 --extend-exclude '.*_pb2(_grpc)?\.py' --check --diff app
 	@source $(VENV_FILE) && \
 		python3 -m mypy $(SOURCE)/main.py
 
