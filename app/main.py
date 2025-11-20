@@ -33,8 +33,7 @@ def main():
 
     while True:
         try:
-            # vm_manager.run()
-            pass
+            vm_manager.run()
         except Exception as e:
             logging.exception(e)
             time.sleep(60)

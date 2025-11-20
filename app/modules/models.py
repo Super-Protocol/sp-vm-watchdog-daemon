@@ -17,7 +17,7 @@ class VmQemuConfigMode(str, Enum):
 
     @staticmethod
     def _is_cpu_flag_set(cpu_flags_line: str, flag: str) -> bool:
-        return flag.lower() in cpu_flags_line.lower().split()
+        return flag.lower() in cpu_flags_line.lower()
 
     @classmethod
     def detect(cls) -> "VmQemuConfigMode":

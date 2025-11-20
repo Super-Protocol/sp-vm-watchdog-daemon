@@ -166,7 +166,7 @@ class GpuManager:
                 return int(line.split("enable = ")[1]) == 1
         raise Exception(f'failed to get status cc mode on: `{device.pci_path}`, reason: `{stderr}`')
 
-    def gpu_ensure_cc_enabled(self, device: Device, enabled: bool) -> None:
+    def gpu_ensure_cc_enabled(self, vm_name: str, device: Device, enabled: bool) -> None:
         enabled_str = 'on' if enabled else 'off'
         current_enabled = self.is_gpu_cc_enabled(device)
 
@@ -179,6 +179,9 @@ class GpuManager:
         ]
 
         if current_enabled != enabled:
+            self.logger.warning(
+                "cc mode mismatch for vm: found: `{current_enabled}`, expected: `{enabled}`, vm: `{vm_name}`, device: `{device.pci_path}`, fixing"
+            )
             ret = subprocess.run(command, capture_output=True)
             stderr = ret.stderr.decode('utf-8')
             if ret.returncode != 0:
@@ -196,7 +199,7 @@ class GpuManager:
                 return line.split("PPCIe mode is ")[1] == "on"
         raise Exception(f'failed to get status ppcie mode on: `{device.pci_path}`, reason: `{stderr}`')
 
-    def gpu_ensure_ppcie_enabled(self, device: Device, enabled: bool) -> None:
+    def gpu_ensure_ppcie_enabled(self, vm_name: str, device: Device, enabled: bool) -> None:
         enabled_str = 'on' if enabled else 'off'
         current_enabled = self.is_gpu_ppcie_enabled(device)
         command = [
@@ -207,6 +210,9 @@ class GpuManager:
             "--reset-after-ppcie-mode-switch",
         ]
         if current_enabled != enabled:
+            self.logger.warning(
+                "ppcie mode mismatch for vm: found: `{current_enabled}`, expected: `{enabled}`, vm: `{vm_name}`, device: `{device.pci_path}`, fixing"
+            )
             ret = subprocess.run(command, capture_output=True)
             stderr = ret.stderr.decode('utf-8')
             if ret.returncode != 0:

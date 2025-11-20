@@ -57,7 +57,6 @@ class VmManager:
         )
 
     def start_vm(self, d: Daemonizer) -> None:
-        # TODO: ensure GPU
         self.logger.info(f'starting vm: `{d.vm.config.name}`')
 
         if d.is_running():
