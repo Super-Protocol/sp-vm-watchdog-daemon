@@ -124,7 +124,8 @@ class VmConfig(BaseModel):
             found_gpu = next((g for g in gpu_manager.gpu_devices if g.pci_path == gpu), None)
             if found_gpu is None:
                 raise Exception(f"gpu: `{gpu}` for vm: `{self.name}` specified in config but not present in system")
-
+            gpu_manager.gpu_ensure_ppcie_enabled(found_gpu, False)
+            gpu_manager.gpu_ensure_cc_enabled(found_gpu, True)
         return self
 
 

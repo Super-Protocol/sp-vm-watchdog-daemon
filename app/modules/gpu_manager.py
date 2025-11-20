@@ -154,6 +154,64 @@ class GpuManager:
             if device.driver_in_use != "vfio-pci":
                 self.replace_driver(device, "vfio-pci")
 
+    def is_gpu_cc_enabled(self, device: Device) -> bool:
+        command = [self.gpu_admin_tools, "--gpu-bdf", device.pci_path, "--query-cc-settings"]
+        ret = subprocess.run(command, capture_output=True)
+        stderr = ret.stderr.decode('utf-8')  # nvidia_gpu_tools.py sends output to stderr... :-(
+        if ret.returncode != 0:
+            raise Exception(f'failed to get status cc mode on: `{device.pci_path}`, reason: `{stderr}`')
+
+        for line in stderr.splitlines():
+            if "enable " in line:
+                return int(line.split("enable = ")[1]) == 1
+        raise Exception(f'failed to get status cc mode on: `{device.pci_path}`, reason: `{stderr}`')
+
+    def gpu_ensure_cc_enabled(self, device: Device, enabled: bool) -> None:
+        enabled_str = 'on' if enabled else 'off'
+        current_enabled = self.is_gpu_cc_enabled(device)
+
+        command = [
+            self.gpu_admin_tools,
+            "--gpu-bdf",
+            device.pci_path,
+            f"--set-cc-mode={enabled_str}",
+            "--reset-after-cc-mode-switch",
+        ]
+
+        if current_enabled != enabled:
+            ret = subprocess.run(command, capture_output=True)
+            stderr = ret.stderr.decode('utf-8')
+            if ret.returncode != 0:
+                raise Exception(f'failed set cc mode on: `{device.pci_path}` to `{enabled_str}`, reason: `{stderr}`')
+
+    def is_gpu_ppcie_enabled(self, device: Device) -> bool:
+        command = [self.gpu_admin_tools, "--gpu-bdf", device.pci_path, "--query-ppcie-mode"]
+        ret = subprocess.run(command, capture_output=True)
+        stderr = ret.stderr.decode('utf-8')
+        if ret.returncode != 0:
+            raise Exception(f'failed to get status ppcie mode on: `{device.pci_path}`, reason: `{stderr}`')
+
+        for line in stderr.splitlines():
+            if "PPCIe mode is " in line:
+                return line.split("PPCIe mode is ")[1] == "on"
+        raise Exception(f'failed to get status ppcie mode on: `{device.pci_path}`, reason: `{stderr}`')
+
+    def gpu_ensure_ppcie_enabled(self, device: Device, enabled: bool) -> None:
+        enabled_str = 'on' if enabled else 'off'
+        current_enabled = self.is_gpu_ppcie_enabled(device)
+        command = [
+            self.gpu_admin_tools,
+            "--gpu-bdf",
+            device.pci_path,
+            f"--set-ppcie-mode={enabled_str}",
+            "--reset-after-ppcie-mode-switch",
+        ]
+        if current_enabled != enabled:
+            ret = subprocess.run(command, capture_output=True)
+            stderr = ret.stderr.decode('utf-8')
+            if ret.returncode != 0:
+                raise Exception(f'failed set ppcie mode on: `{device.pci_path}` to `{enabled_str}`, reason: `{stderr}`')
+
 
 # gpu_manager: GpuManager | None = None
 gpu_manager = GpuManager()
