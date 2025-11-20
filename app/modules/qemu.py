@@ -70,8 +70,8 @@ class Qemu(BaseModel):
             ret += ["-cpu", "host"]
         return ret
 
-    def get_pci_device_param(self, devices: list[Device] | None) -> list[str]:
-        ret = []
+    def get_pci_device_param(self, devices: list[str] | None) -> list[str]:
+        ret = []  # type: ignore[var-annotated]
 
         if devices is None or len(devices) == 0:
             return ret

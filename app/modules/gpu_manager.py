@@ -57,24 +57,47 @@ class GpuManager:
         if ret.returncode != 0:
             stderr = ret.stderr.decode('utf-8')
             msg = f'{stdout} {stderr}'
-            raise Exception(f'failed to get devices from `lscpi`: `target_file`, reason: `{msg}`')
+            raise Exception(f'failed to get devices from `lscpi`: `{vendor_id}`, reason: `{msg}`')
 
         res = jc.parse('lspci', stdout)
+        if not isinstance(res, list):
+            raise Exception(f'js parse from lspci is not a list')
 
         devices = []
         for d in res:
+            if not isinstance(d, dict):
+                raise Exception(f"failed to parse device `{d}` from devices: `{res}`")
+
             if d.get('class', None) != device_class_name:
                 continue
 
             domain_int = d.get("domain_int")
+            if not isinstance(domain_int, int):
+                raise Exception(f"failed to get key 'domain_int' from device: `{d}`")
             domain_hex = f"{domain_int:04x}"
+
+            name = d.get('device')
+            if not isinstance(name, str):
+                raise Exception(f"failed to get key 'device' from device: `{d}`")
+
+            vendor = d.get('vendor')
+            if not isinstance(vendor, str):
+                raise Exception(f"failed to get key 'vendor' from device: `{d}`")
+
             slot = d.get("slot")
+            if not isinstance(slot, str):
+                raise Exception(f"failed to get key 'slot' from device: `{d}`")
+
+            driver_in_use = d.get('driver', None)
+            if not isinstance(driver_in_use, str | None):
+                raise Exception(f"failed to get key 'driver_in_use' from device: `{d}`")
+
             devices.append(
                 Device(
-                    name=d.get('device'),
+                    name=name,
                     pci_path=f"{domain_hex}:{slot}",
-                    vendor=d.get('vendor'),
-                    driver_in_use=d.get('driver', None),
+                    vendor=vendor,
+                    driver_in_use=driver_in_use,
                 )
             )
 
