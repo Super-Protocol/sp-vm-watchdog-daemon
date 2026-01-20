@@ -113,9 +113,9 @@ class Daemonizer:
             if process is not None:
                 running_state, state = self.is_process_running(process)
                 if running_state:
-                    __logger__.info(f"attempting to start process wich already started, pid: `{pid}`, state: `{state}`")
+                    __logger__.info(f"attempting to start process which is already running, pid: `{pid}`, state: `{state}`")
                     return False
-                __logger__.warning(f"found procrss: `{pid}` in a wrong state: `{state}`, removing")
+                __logger__.warning(f"found process: `{pid}` in an invalid state: `{state}`, removing")
                 self.remove_stopped_process(process)
             self.remove_pid_file()
 
@@ -149,7 +149,7 @@ class Daemonizer:
         self.write_pid_file(p.pid)
 
         if log_f:
-            log_f.close()  # the decriptors will alive in a child process
+            log_f.close()  # the descriptors will stay alive in a child process
 
         __logger__.info(f"vm: `{vm_name}` started successfully")
         return True
@@ -172,7 +172,7 @@ class Daemonizer:
         gone, alive = psutil.wait_procs([process], timeout=timeout)
         if alive:
             __logger__.warning(
-                f"timeout: `{timeout}` is exeeded while awaiting graceful shutdown of process with pid: `{pid}`"
+                f"timeout: `{timeout}` is exceeded while awaiting graceful shutdown of process with pid: `{pid}`"
             )
         else:
             __logger__.info(f"graceful shutdown success for process with pid: `{pid}`")

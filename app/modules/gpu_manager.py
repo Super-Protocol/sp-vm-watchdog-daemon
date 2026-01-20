@@ -57,7 +57,7 @@ class GpuManager:
         if ret.returncode != 0:
             stderr = ret.stderr.decode('utf-8')
             msg = f'{stdout} {stderr}'
-            raise Exception(f'failed to get devices from `lscpi`: `{vendor_id}`, reason: `{msg}`')
+            raise Exception(f'failed to get devices from `lspci`: `{vendor_id}`, reason: `{msg}`')
 
         res = jc.parse('lspci', stdout)
         if not isinstance(res, list):
