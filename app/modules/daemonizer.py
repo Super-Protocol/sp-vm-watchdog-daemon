@@ -113,7 +113,9 @@ class Daemonizer:
             if process is not None:
                 running_state, state = self.is_process_running(process)
                 if running_state:
-                    __logger__.info(f"attempting to start process which is already running, pid: `{pid}`, state: `{state}`")
+                    __logger__.info(
+                        f"attempting to start process which is already running, pid: `{pid}`, state: `{state}`"
+                    )
                     return False
                 __logger__.warning(f"found process: `{pid}` in an invalid state: `{state}`, removing")
                 self.remove_stopped_process(process)
