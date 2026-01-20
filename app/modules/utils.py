@@ -59,10 +59,10 @@ def find_qemu_on_system() -> Path | None:
 
 def modprobe(name: str) -> None:
     cmd = ['modprobe', name]
-    ret = subprocess.run(cmd, capture_output=True)
+    ret = subprocess.run(cmd, capture_output=True, text=True)
     if ret.returncode != 0:
-        stdout = ret.stdout.decode('utf-8')
-        stderr = ret.stderr.decode('utf-8')
+        stdout = ret.stdout
+        stderr = ret.stderr
         msg = f'{stdout} {stderr}'
         raise Exception(f'failed to modprobe {name}, reason: `{msg}`')
 
@@ -121,16 +121,16 @@ def get_phys_bits() -> str:
 
 def is_file_in_use(path: str) -> bool:
     cmd = ['lsof', path]
-    ret = subprocess.run(cmd, capture_output=True)
+    ret = subprocess.run(cmd, capture_output=True, text=True)
     if ret.returncode == 0:
         return True
 
     # is exit code != 0 this means both: error, and the file isn't opened by anything
-    stderr = ret.stderr.decode('utf-8')
+    stderr = ret.stderr
     if not stderr:
         return False
 
-    stdout = ret.stdout.decode('utf-8')
+    stdout = ret.stdout
     msg = f'{stdout} {stderr}'
     raise Exception(f'lsof on `{path}` failed, reason: `{msg}`')
 
@@ -140,11 +140,11 @@ def prepare_provider_config_disk(image_path: str, source_files: dict) -> None:
     mount_path = mount_path_temp.name
     try:
         cmd = ["mkfs.ext4", "-O", "^has_journal,^huge_file,^meta_bg,^ext_attr", "-L", "provider_config", image_path]
-        ret = subprocess.run(cmd, capture_output=True)
+        ret = subprocess.run(cmd, capture_output=True, text=True)
         assert ret.returncode == 0
 
         cmd = ["mount", "-o", "loop", image_path, mount_path]
-        ret = subprocess.run(cmd, capture_output=True)
+        ret = subprocess.run(cmd, capture_output=True, text=True)
         assert ret.returncode == 0
 
         for target_name, source_path in source_files.items():
@@ -162,12 +162,12 @@ def prepare_provider_config_disk(image_path: str, source_files: dict) -> None:
             shutil.rmtree(lost_found_path)
 
         cmd = ["umount", mount_path]
-        ret = subprocess.run(cmd, capture_output=True)
+        ret = subprocess.run(cmd, capture_output=True, text=True)
         assert ret.returncode == 0
 
     except AssertionError as e:
-        stdout = ret.stdout.decode('utf-8')
-        stderr = ret.stderr.decode('utf-8')
+        stdout = ret.stdout
+        stderr = ret.stderr
         msg = f'{stdout} {stderr}'
         raise Exception(f'failed to create provider config disk: `{image_path}`, reason: `{msg}`')
 

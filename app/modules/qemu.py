@@ -183,10 +183,10 @@ class Qemu(BaseModel):
     def create_disk_image(self, target_file: str, img_type: str, size: str) -> None:
         __logger__.info(f'creating image: `{target_file}`, type: `{img_type}`, size: `{size}`')
         cmd = ['qemu-img', 'create', '-f', img_type, target_file, size]
-        ret = subprocess.run(cmd, capture_output=True)
+        ret = subprocess.run(cmd, capture_output=True, text=True)
         if ret.returncode != 0:
-            stdout = ret.stdout.decode('utf-8')
-            stderr = ret.stderr.decode('utf-8')
+            stdout = ret.stdout
+            stderr = ret.stderr
             msg = f'{stdout} {stderr}'
             raise Exception(f'failed to create qemu img: `{target_file}`, reason: `{msg}`')
 

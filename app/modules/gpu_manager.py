@@ -51,11 +51,11 @@ class GpuManager:
         self.logger.info(
             f'searching pci devices on system, with class: `{device_class_name}` and vendor id: `{vendor_id}`'
         )
-        ret = subprocess.run(["lspci", "-nnmmkv", "-d", vendor_id], capture_output=True)
-        stdout = ret.stdout.decode('utf-8')
+        ret = subprocess.run(["lspci", "-nnmmkv", "-d", vendor_id], capture_output=True, text=True)
+        stdout = ret.stdout
 
         if ret.returncode != 0:
-            stderr = ret.stderr.decode('utf-8')
+            stderr = ret.stderr
             msg = f'{stdout} {stderr}'
             raise Exception(f'failed to get devices from `lspci`: `{vendor_id}`, reason: `{msg}`')
 
@@ -126,7 +126,7 @@ class GpuManager:
             current_driver = current_driver_link_file.resolve()
             self.logger.info(f'unbinding already binded driver: `{current_driver}` for device: `{device_pci_path}`')
             current_driver_unbind = current_driver / Path('unbind')
-            current_driver_unbind.write_text(device_pci_path)
+            current_driver_unbind.write_text(device_pci_path + '\n')
 
         driver_override_path = sysfs_device_path / Path('driver_override')
         if not driver_override_path.is_file():
@@ -134,7 +134,7 @@ class GpuManager:
                 f'failed to replace driver for: `{device_pci_path}`, reason: path `{driver_override_path}` not found'
             )
 
-        driver_override_path.write_text(driver_name)
+        driver_override_path.write_text(driver_name + '\n')
 
         driver_bind_path = driver_path / Path('bind')
         if not driver_bind_path.is_file():
@@ -142,7 +142,7 @@ class GpuManager:
                 f'failed to replace driver for: `{device_pci_path}`, reason: path `{driver_bind_path}` not found'
             )
 
-        driver_bind_path.write_text(device_pci_path)
+        driver_bind_path.write_text(device_pci_path + '\n')
 
         if not current_driver_link_file.is_symlink() or current_driver_link_file.resolve() != driver_path:
             raise Exception(f'failed to replace driver for: `{device_pci_path}`, reason: unknown error')
@@ -156,8 +156,8 @@ class GpuManager:
 
     def is_gpu_cc_enabled(self, device: Device) -> bool:
         command = [self.gpu_admin_tools, "--gpu-bdf", device.pci_path, "--query-cc-settings"]
-        ret = subprocess.run(command, capture_output=True)
-        stderr = ret.stderr.decode('utf-8')  # nvidia_gpu_tools.py sends output to stderr... :-(
+        ret = subprocess.run(command, capture_output=True, text=True)
+        stderr = ret.stderr  # nvidia_gpu_tools.py sends output to stderr... :-(
         if ret.returncode != 0:
             raise Exception(f'failed to get status cc mode on: `{device.pci_path}`, reason: `{stderr}`')
 
@@ -182,15 +182,15 @@ class GpuManager:
             self.logger.warning(
                 "cc mode mismatch for vm: found: `{current_enabled}`, expected: `{enabled}`, vm: `{vm_name}`, device: `{device.pci_path}`, fixing"
             )
-            ret = subprocess.run(command, capture_output=True)
-            stderr = ret.stderr.decode('utf-8')
+            ret = subprocess.run(command, capture_output=True, text=True)
+            stderr = ret.stderr
             if ret.returncode != 0:
                 raise Exception(f'failed set cc mode on: `{device.pci_path}` to `{enabled_str}`, reason: `{stderr}`')
 
     def is_gpu_ppcie_enabled(self, device: Device) -> bool:
         command = [self.gpu_admin_tools, "--gpu-bdf", device.pci_path, "--query-ppcie-mode"]
-        ret = subprocess.run(command, capture_output=True)
-        stderr = ret.stderr.decode('utf-8')
+        ret = subprocess.run(command, capture_output=True, text=True)
+        stderr = ret.stderr
         if ret.returncode != 0:
             raise Exception(f'failed to get status ppcie mode on: `{device.pci_path}`, reason: `{stderr}`')
 
@@ -213,8 +213,8 @@ class GpuManager:
             self.logger.warning(
                 "ppcie mode mismatch for vm: found: `{current_enabled}`, expected: `{enabled}`, vm: `{vm_name}`, device: `{device.pci_path}`, fixing"
             )
-            ret = subprocess.run(command, capture_output=True)
-            stderr = ret.stderr.decode('utf-8')
+            ret = subprocess.run(command, capture_output=True, text=True)
+            stderr = ret.stderr
             if ret.returncode != 0:
                 raise Exception(f'failed set ppcie mode on: `{device.pci_path}` to `{enabled_str}`, reason: `{stderr}`')
 
