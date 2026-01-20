@@ -1,2 +1,8 @@
 isort==6.0.1
 black==25.1.0
+mypy==1.18.2
+mypy_extensions==1.1.0
+types-requests==2.32.4.20250913
+types-protobuf==6.32.1.20250918
+types-grpcio==1.0.0.20251009
+types-psutil==7.0.0.20251001

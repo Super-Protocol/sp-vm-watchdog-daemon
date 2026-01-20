@@ -1,0 +1,6 @@
+[submodule "lib/sp-vm-proto"]
+	path = lib/sp-vm-proto
+	url = https://github.com/Super-Protocol/sp-vm-proto.git
+[submodule "lib/gpu-admin-tools"]
+	path = lib/gpu_admin_tools
+	url = https://github.com/NVIDIA/gpu-admin-tools.git

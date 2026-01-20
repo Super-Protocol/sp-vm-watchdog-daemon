@@ -1,0 +1,223 @@
+import subprocess
+import logging
+import sys
+import re
+import os
+from pathlib import Path
+
+import jc
+from pydantic import BaseModel, Field
+
+from .utils import modprobe
+
+
+class Device(BaseModel):
+    name: str
+    vendor: str
+    pci_path: str
+    driver_in_use: str | None = None
+
+
+class GpuManager:
+    def __init__(self):
+        self.lspci_regex_main = re.compile(
+            r'^(?P<pci_address>[a-f\d]+:[a-f\d]+.[a-f\d])\W(?P<device_type>.+)\W\[(?P<device_type_id>[a-f\d]+)\]:\W(?P<device_name>.+)\W\[(?P<vendor_id>[a-f\d]+):(?P<device_id>[a-f\d]+)\]'
+        )
+        self.lspci_regex_subsystem = re.compile(r'^\tSubsystem:\W(?P<subsystem>.+)$')
+        self.lspci_regex_driver = re.compile(r'^\tKernel driver in use:\W(?P<driver>.+)$')
+        self.lspci_regex_modules = re.compile(r'^\tKernel modules:\W(?P<modules>.+)$')
+
+        self.requred_kernel_modules = ('vfio', 'vfio-pci')
+        self.logger = logging.getLogger(__name__)
+
+        gpu_admin_tools_dir = Path(os.path.dirname(__file__)).parent.parent / Path('lib/gpu_admin_tools')
+        self.gpu_admin_tools = gpu_admin_tools_dir / Path('nvidia_gpu_tools.py')
+        if not self.gpu_admin_tools.is_file():
+            raise Exception(
+                f'failed to init GpuManager, reason: gpu_admin_tools not found at: `{self.gpu_admin_tools}`'
+            )
+
+        self.gpu_devices = self.find_pci_devices("10de:", "3D controller")
+
+        self.init_modules()
+        self.replace_drivers_to_vfio(self.gpu_devices)
+
+    def init_modules(self) -> None:
+        self.logger.info(f'initializing kernel modules: {self.requred_kernel_modules}')
+        for m in self.requred_kernel_modules:
+            modprobe(m)
+
+    def find_pci_devices(self, vendor_id: str, device_class_name: str) -> list[Device]:
+        self.logger.info(
+            f'searching pci devices on system, with class: `{device_class_name}` and vendor id: `{vendor_id}`'
+        )
+        ret = subprocess.run(["lspci", "-nnmmkv", "-d", vendor_id], capture_output=True, text=True)
+        stdout = ret.stdout
+
+        if ret.returncode != 0:
+            stderr = ret.stderr
+            msg = f'{stdout} {stderr}'
+            raise Exception(f'failed to get devices from `lspci`: `{vendor_id}`, reason: `{msg}`')
+
+        res = jc.parse('lspci', stdout)
+        if not isinstance(res, list):
+            raise Exception(f'js parse from lspci is not a list')
+
+        devices = []
+        for d in res:
+            if not isinstance(d, dict):
+                raise Exception(f"failed to parse device `{d}` from devices: `{res}`")
+
+            if d.get('class', None) != device_class_name:
+                continue
+
+            domain_int = d.get("domain_int")
+            if not isinstance(domain_int, int):
+                raise Exception(f"failed to get key 'domain_int' from device: `{d}`")
+            domain_hex = f"{domain_int:04x}"
+
+            name = d.get('device')
+            if not isinstance(name, str):
+                raise Exception(f"failed to get key 'device' from device: `{d}`")
+
+            vendor = d.get('vendor')
+            if not isinstance(vendor, str):
+                raise Exception(f"failed to get key 'vendor' from device: `{d}`")
+
+            slot = d.get("slot")
+            if not isinstance(slot, str):
+                raise Exception(f"failed to get key 'slot' from device: `{d}`")
+
+            driver_in_use = d.get('driver', None)
+            if not isinstance(driver_in_use, str | None):
+                raise Exception(f"failed to get key 'driver_in_use' from device: `{d}`")
+
+            devices.append(
+                Device(
+                    name=name,
+                    pci_path=f"{domain_hex}:{slot}",
+                    vendor=vendor,
+                    driver_in_use=driver_in_use,
+                )
+            )
+
+        if len(devices):
+            self.logger.info(f'found {len(devices)} devices: `{devices}`')
+
+        return devices
+
+    def replace_driver(self, device: Device, driver_name: str) -> None:
+        self.logger.info(f'replacing driver for: `{device.pci_path}`, to: `{driver_name}`')
+        driver_path = Path('/sys/bus/pci/drivers') / Path(driver_name)
+        device_pci_path = device.pci_path
+        if not driver_path.is_dir():
+            raise Exception(
+                f'failed to replace driver for: `{device_pci_path}`, reason: driver path `{driver_path}` not found'
+            )
+        sysfs_device_path = Path(f'/sys/bus/pci/devices/{device_pci_path}')
+        if not sysfs_device_path.is_dir():
+            raise Exception(
+                f'failed to replace driver for: `{device_pci_path}`, reason: path `{sysfs_device_path}` not found'
+            )
+
+        current_driver_link_file = sysfs_device_path / Path('driver')
+        # https://code.google.com/archive/p/pci-hacking/wikis/bind_Uunbind_PCI.wiki
+        if current_driver_link_file.is_symlink():
+            current_driver = current_driver_link_file.resolve()
+            self.logger.info(f'unbinding already binded driver: `{current_driver}` for device: `{device_pci_path}`')
+            current_driver_unbind = current_driver / Path('unbind')
+            current_driver_unbind.write_text(device_pci_path + '\n')
+
+        driver_override_path = sysfs_device_path / Path('driver_override')
+        if not driver_override_path.is_file():
+            raise Exception(
+                f'failed to replace driver for: `{device_pci_path}`, reason: path `{driver_override_path}` not found'
+            )
+
+        driver_override_path.write_text(driver_name + '\n')
+
+        driver_bind_path = driver_path / Path('bind')
+        if not driver_bind_path.is_file():
+            raise Exception(
+                f'failed to replace driver for: `{device_pci_path}`, reason: path `{driver_bind_path}` not found'
+            )
+
+        driver_bind_path.write_text(device_pci_path + '\n')
+
+        if not current_driver_link_file.is_symlink() or current_driver_link_file.resolve() != driver_path:
+            raise Exception(f'failed to replace driver for: `{device_pci_path}`, reason: unknown error')
+
+        device.driver_in_use = driver_name
+
+    def replace_drivers_to_vfio(self, devices: list[Device]) -> None:
+        for device in devices:
+            if device.driver_in_use != "vfio-pci":
+                self.replace_driver(device, "vfio-pci")
+
+    def is_gpu_cc_enabled(self, device: Device) -> bool:
+        command = [self.gpu_admin_tools, "--gpu-bdf", device.pci_path, "--query-cc-settings"]
+        ret = subprocess.run(command, capture_output=True, text=True)
+        stderr = ret.stderr  # nvidia_gpu_tools.py sends output to stderr... :-(
+        if ret.returncode != 0:
+            raise Exception(f'failed to get status cc mode on: `{device.pci_path}`, reason: `{stderr}`')
+
+        for line in stderr.splitlines():
+            if "enable " in line:
+                return int(line.split("enable = ")[1]) == 1
+        raise Exception(f'failed to get status cc mode on: `{device.pci_path}`, reason: `{stderr}`')
+
+    def gpu_ensure_cc_enabled(self, vm_name: str, device: Device, enabled: bool) -> None:
+        enabled_str = 'on' if enabled else 'off'
+        current_enabled = self.is_gpu_cc_enabled(device)
+
+        command = [
+            self.gpu_admin_tools,
+            "--gpu-bdf",
+            device.pci_path,
+            f"--set-cc-mode={enabled_str}",
+            "--reset-after-cc-mode-switch",
+        ]
+
+        if current_enabled != enabled:
+            self.logger.warning(
+                "cc mode mismatch for vm: found: `{current_enabled}`, expected: `{enabled}`, vm: `{vm_name}`, device: `{device.pci_path}`, fixing"
+            )
+            ret = subprocess.run(command, capture_output=True, text=True)
+            stderr = ret.stderr
+            if ret.returncode != 0:
+                raise Exception(f'failed set cc mode on: `{device.pci_path}` to `{enabled_str}`, reason: `{stderr}`')
+
+    def is_gpu_ppcie_enabled(self, device: Device) -> bool:
+        command = [self.gpu_admin_tools, "--gpu-bdf", device.pci_path, "--query-ppcie-mode"]
+        ret = subprocess.run(command, capture_output=True, text=True)
+        stderr = ret.stderr
+        if ret.returncode != 0:
+            raise Exception(f'failed to get status ppcie mode on: `{device.pci_path}`, reason: `{stderr}`')
+
+        for line in stderr.splitlines():
+            if "PPCIe mode is " in line:
+                return line.split("PPCIe mode is ")[1] == "on"
+        raise Exception(f'failed to get status ppcie mode on: `{device.pci_path}`, reason: `{stderr}`')
+
+    def gpu_ensure_ppcie_enabled(self, vm_name: str, device: Device, enabled: bool) -> None:
+        enabled_str = 'on' if enabled else 'off'
+        current_enabled = self.is_gpu_ppcie_enabled(device)
+        command = [
+            self.gpu_admin_tools,
+            "--gpu-bdf",
+            device.pci_path,
+            f"--set-ppcie-mode={enabled_str}",
+            "--reset-after-ppcie-mode-switch",
+        ]
+        if current_enabled != enabled:
+            self.logger.warning(
+                "ppcie mode mismatch for vm: found: `{current_enabled}`, expected: `{enabled}`, vm: `{vm_name}`, device: `{device.pci_path}`, fixing"
+            )
+            ret = subprocess.run(command, capture_output=True, text=True)
+            stderr = ret.stderr
+            if ret.returncode != 0:
+                raise Exception(f'failed set ppcie mode on: `{device.pci_path}` to `{enabled_str}`, reason: `{stderr}`')
+
+
+# gpu_manager: GpuManager | None = None
+gpu_manager = GpuManager()

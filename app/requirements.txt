@@ -1,1 +1,6 @@
-requests>=2.28.1
+requests==2.32.5
+pydantic==2.11.7
+grpcio==1.75.1
+grpcio-tools==1.75.1
+psutil==7.0.0
+jc==1.25.6
