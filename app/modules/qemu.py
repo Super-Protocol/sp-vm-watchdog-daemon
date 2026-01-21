@@ -1,9 +1,11 @@
 import subprocess
 import logging
 import json
+import shutil
+import os
 from pathlib import Path
 from hashlib import md5
-from typing import Tuple, Dict
+from typing import Tuple
 
 from pydantic import model_validator, BaseModel, Field
 
@@ -22,8 +24,8 @@ class Qemu(BaseModel):
     cmd: list[str] | None = None
     state_disk_path: Path
     provider_config_disk_path: Path
-    provider_config_files: Dict[str, str] = Field(default_factory=dict)
-    provider_config_files_hash: bytes | None = None
+    provider_config_directory: str | None = None
+    provider_config_hash: bytes | None = None
     pci_device_count: int = 0
 
     @classmethod
@@ -38,26 +40,34 @@ class Qemu(BaseModel):
             state_disk_path=state_disk_path,
         )
         c.cmd = c.get_cmdline_from_config()
-        c.provider_config_files, c.provider_config_files_hash = c.get_provider_config_files()
+        c.provider_config_directory, c.provider_config_hash = c.get_provider_config_files()
 
         return c
 
-    def get_provider_config_files(self) -> Tuple[Dict[str, str], bytes]:
-        tee_prov_configmap = self.config.run_configuration.provider_config.execution_controller_tee_prov_configmap
-        source_files = {"manifests/configmap.execution-controller-tee-prov.yaml": tee_prov_configmap}
+    def get_provider_config_files(self) -> Tuple[str, bytes]:
+        provider_config_dir = self.config.run_configuration.provider_config_directory
 
-        if self.config.run_configuration.provider_config.sp_pki_challenge_secret is not None:
-            sp_pki_challenge_secret = self.config.run_configuration.provider_config.sp_pki_challenge_secret
-            source_files['manifests/secret.sp-pki-challenge.yaml'] = sp_pki_challenge_secret
-
+        # Add authorized_keys if debug mode and authorized_keys_file is specified
         if (
             self.config.run_configuration.debug is True
             and self.app_config.text_config.vm_config.authorized_keys_file is not None
         ):
-            source_files['authorized_keys'] = self.app_config.text_config.vm_config.authorized_keys_file
+            authorized_keys_src = self.app_config.text_config.vm_config.authorized_keys_file
+            authorized_keys_dst = Path(provider_config_dir) / 'authorized_keys'
+            if authorized_keys_dst.exists():
+                authorized_keys_dst.unlink()
+            shutil.copy(authorized_keys_src, authorized_keys_dst)
 
-        source_files_hash = md5(json.dumps(source_files).encode('utf-8')).digest()
-        return source_files, source_files_hash
+        # Calculate hash of the entire directory
+        def hash_directory(path: Path) -> bytes:
+            hasher = md5()
+            for file_path in sorted(path.rglob('*')):
+                if file_path.is_file():
+                    hasher.update(file_path.read_bytes())
+            return hasher.digest()
+
+        provider_config_hash = hash_directory(Path(provider_config_dir))
+        return provider_config_dir, provider_config_hash
 
     def get_cpu_params(self) -> list[str]:
         ret = []

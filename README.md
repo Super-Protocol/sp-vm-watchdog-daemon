@@ -168,10 +168,7 @@ Each VM is described by a JSON file in `/etc/sp/watchdog/vms`, for example:
     "vm_build": "build-285",
     "argo_branch": "main",
     "argo_sp_env": "main",
-    "provider_config": {
-      "execution_controller_tee_prov_configmap": "/path/to/manifests/configmap.execution-controller-tee-prov.yaml",
-      "sp_pki_challenge_secret": "/path/to/manifests/secret.sp-pki-challenge.yaml"
-    }
+    "provider_config_directory": "/path/to/provider_config_directory"
   },
   "qemu_configuration": {
     "cores": 30,
@@ -200,8 +197,7 @@ Key fields:
   - `vm_build` – VM image version; if `"auto`" or `null`, watchdog asks downloader for latest GitHub release
   - `build_dir` – alternative to `vm_build` for local builds (mutually exclusive)
   - `argo_branch`, `argo_sp_env` – passed to kernel cmdline for in‑VM boot configuration
-  - `provider_config.execution_controller_tee_prov_configmap` – path to the provider ConfigMap file
-  - `provider_config.sp_pki_challenge_secret` – (optional) path to PKI challenge Secret
+  - `provider_config_directory` – path to directory containing provider configuration files (mounted as `/sp` inside VM)
 
 - **qemu_configuration**
   - `cores` – number of vCPUs

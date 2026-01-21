@@ -135,7 +135,7 @@ def is_file_in_use(path: str) -> bool:
     raise Exception(f'lsof on `{path}` failed, reason: `{msg}`')
 
 
-def prepare_provider_config_disk(image_path: str, source_files: dict) -> None:
+def prepare_provider_config_disk(image_path: str, source_directory: str) -> None:
     mount_path_temp = tempfile.TemporaryDirectory()
     mount_path = mount_path_temp.name
     try:
@@ -147,17 +147,20 @@ def prepare_provider_config_disk(image_path: str, source_files: dict) -> None:
         ret = subprocess.run(cmd, capture_output=True, text=True)
         assert ret.returncode == 0
 
-        for target_name, source_path in source_files.items():
-            src_path = Path(source_path)
-            if not src_path.exists():
-                raise Exception(f'src file: `{src_path}` not exists!')
+        src_dir = Path(source_directory)
+        if not src_dir.is_dir():
+            raise Exception(f'source directory: `{src_dir}` not exists or not a directory!')
 
-            dst_path = Path(mount_path) / Path(target_name)
-            dst_path.parent.mkdir(exist_ok=True, parents=True)
+        # Copy entire directory recursively
+        dst_dir = Path(mount_path)
+        for src_path in src_dir.rglob('*'):
+            if src_path.is_file():
+                rel_path = src_path.relative_to(src_dir)
+                dst_path = dst_dir / rel_path
+                dst_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_path, dst_path)
 
-            shutil.copy(src_path, dst_path)
-
-        lost_found_path = Path(mount_path) / Path('lost+found')
+        lost_found_path = dst_dir / Path('lost+found')
         if lost_found_path.exists():
             shutil.rmtree(lost_found_path)
 

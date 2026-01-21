@@ -14,33 +14,22 @@ from . import utils
 __logger__ = logging.getLogger(__name__)
 
 
-class ProviderConfig(BaseModel):
-    execution_controller_tee_prov_configmap: str
-    sp_pki_challenge_secret: str | None = None
-
-    @model_validator(mode="after")
-    def check_execution_controller_tee_prov_configmap(self):
-        configmap_path = Path(self.execution_controller_tee_prov_configmap)
-        if not os.access(configmap_path, os.R_OK):
-            raise Exception(f"execution_controller_tee_prov_configmap isn't readable: `{configmap_path}`")
-        return self
-
-    @model_validator(mode="after")
-    def check_sp_pki_challenge_secret(self):
-        if self.sp_pki_challenge_secret is not None:
-            secret_path = Path(self.sp_pki_challenge_secret)
-            if not os.access(secret_path, os.R_OK):
-                raise Exception(f"sp_pki_challenge_secret isn't readable: `{secret_path}`")
-        return self
-
-
 class VmRunConfig(BaseModel):
     debug: bool = False
     build_dir: str | None = None  # model_validator
     vm_build: str | None = None  # model_validator
     argo_branch: str = "main"
     argo_sp_env: str = "main"
-    provider_config: ProviderConfig
+    provider_config_directory: str
+
+    @model_validator(mode="after")
+    def check_provider_config_directory(self):
+        directory_path = Path(self.provider_config_directory)
+        if not directory_path.is_dir():
+            raise Exception(f"provider_config directory doesn't exist: `{directory_path}`")
+        if not os.access(directory_path, os.R_OK):
+            raise Exception(f"provider_config directory isn't readable: `{directory_path}`")
+        return self
 
     @model_validator(mode="after")
     def check_mutually_exclusive(self):
@@ -168,8 +157,7 @@ class TextConfig(BaseModel):
                 filepath.write_text(c.dump())
             except Exception as e:
                 __logger__.error(f"failed to save default config, reason: {e}")
-            finally:
-                return c
+            return c
 
         data = filepath.read_text(encoding="utf-8")
         return cls.model_validate_json(data)

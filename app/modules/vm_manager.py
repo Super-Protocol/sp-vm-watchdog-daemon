@@ -52,9 +52,9 @@ class VmManager:
             target_file=str(vm.provider_config_disk_path), img_type="raw", size=provider_config_disk_size
         )
 
-        prepare_provider_config_disk(
-            image_path=str(vm.provider_config_disk_path), source_files=vm.provider_config_files
-        )
+    prepare_provider_config_disk(
+        image_path=str(vm.provider_config_disk_path), source_directory=vm.provider_config_directory
+    )
 
     def start_vm(self, d: Daemonizer) -> None:
         self.logger.info(f'starting vm: `{d.vm.config.name}`')
@@ -66,7 +66,7 @@ class VmManager:
         self.recreate_provider_config_disk(d.vm)
         if not d.start():
             raise Exception(f'failed to start vm: `{d.vm.config.name}`')
-        d.write_config_hash(d.vm.provider_config_files_hash)  # type: ignore[arg-type]
+        d.write_config_hash(d.vm.provider_config_hash)  # type: ignore[arg-type]
 
     def stop_vm(self, d: Daemonizer) -> None:
         self.logger.info(f'stopping vm: `{d.vm.config.name}`')
@@ -88,9 +88,9 @@ class VmManager:
             source_file_mtime = datetime.fromtimestamp(source_filepath.stat().st_mtime)
             if source_file_mtime > provider_config_ctime:
                 return True
-            provider_config_files_hash_new = d.vm.provider_config_files_hash
-            provider_config_files_hash_old = d.get_config_hash_from_file()
-            if provider_config_files_hash_new != provider_config_files_hash_old:
+            provider_config_hash_new = d.vm.provider_config_hash
+            provider_config_hash_old = d.get_config_hash_from_file()
+            if provider_config_hash_new != provider_config_hash_old:
                 return True
         return False
 
