@@ -53,7 +53,7 @@ class VmManager:
         )
 
         prepare_provider_config_disk(
-            image_path=str(vm.provider_config_disk_path), source_files=vm.provider_config_files
+            image_path=str(vm.provider_config_disk_path), source_directory=vm.provider_config_directory
         )
 
     def start_vm(self, d: Daemonizer) -> None:
@@ -66,7 +66,7 @@ class VmManager:
         self.recreate_provider_config_disk(d.vm)
         if not d.start():
             raise Exception(f'failed to start vm: `{d.vm.config.name}`')
-        d.write_config_hash(d.vm.provider_config_files_hash)  # type: ignore[arg-type]
+        d.write_config_hash(d.vm.provider_config_hash)  # type: ignore[arg-type]
 
     def stop_vm(self, d: Daemonizer) -> None:
         self.logger.info(f'stopping vm: `{d.vm.config.name}`')
@@ -83,15 +83,22 @@ class VmManager:
         if not d.vm.provider_config_disk_path.exists():
             return False
         provider_config_ctime = datetime.fromtimestamp(d.vm.provider_config_disk_path.stat().st_ctime)
-        for target_name, source_path in d.vm.provider_config_files.items():
-            source_filepath = Path(source_path)
-            source_file_mtime = datetime.fromtimestamp(source_filepath.stat().st_mtime)
-            if source_file_mtime > provider_config_ctime:
-                return True
-            provider_config_files_hash_new = d.vm.provider_config_files_hash
-            provider_config_files_hash_old = d.get_config_hash_from_file()
-            if provider_config_files_hash_new != provider_config_files_hash_old:
-                return True
+        # walk through all files in provider config directory and check if any of them
+        # is newer than the provider config disk image
+        if d.vm.provider_config_directory is not None:
+            provider_config_dir = Path(d.vm.provider_config_directory)
+            for source_filepath in provider_config_dir.rglob('*'):
+                if not source_filepath.is_file():
+                    continue
+                source_file_mtime = datetime.fromtimestamp(source_filepath.stat().st_mtime)
+                if source_file_mtime > provider_config_ctime:
+                    return True
+
+        # also compare stored hash with the current hash calculated for provider config directory
+        provider_config_hash_new = d.vm.provider_config_hash
+        provider_config_hash_old = d.get_config_hash_from_file()
+        if provider_config_hash_new != provider_config_hash_old:
+            return True
         return False
 
     def run(self):
